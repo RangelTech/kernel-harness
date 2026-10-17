@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Gate local (mesma imagem de producao)
-        run: scripts/verify.sh
+        run: bash scripts/verify.sh
   secrets:
     runs-on: ubuntu-latest
     steps:
