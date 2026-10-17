@@ -1,0 +1,7 @@
+# SOMENTE desenvolvimento local. Producao: stacks/ do repo vps_rt_infra.
+services:
+  harness:
+    build:
+      context: .
+      dockerfile: docker/harness.Dockerfile
+    ports: ["8080:8080"]
