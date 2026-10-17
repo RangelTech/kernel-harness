@@ -23,44 +23,55 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
       - name: Gate (mesma imagem)
         run: bash scripts/verify.sh
-      - uses: docker/setup-buildx-action@v3
+      - name: Build da imagem (mesmo Dockerfile do gate)
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          docker build -f docker/harness.Dockerfile --build-arg GIT_COMMIT="${GITHUB_SHA}" -t "kernel-harness/harness:${V}" .
+          docker save "kernel-harness/harness:${V}" | gzip -9 > image.tar.gz
+          echo "IMAGE_ID=$(docker image inspect --format '{{.Id}}' "kernel-harness/harness:${V}")" >> "$GITHUB_ENV"
+          echo "ARCHIVE_SHA=$(sha256sum image.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          ls -l image.tar.gz
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build e push
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/harness.Dockerfile
-          push: true
-          build-args: |
-            GIT_COMMIT=${{ github.sha }}
-          tags: |
-            ghcr.io/rangeltech/kernel-harness/harness:${{ steps.v.outputs.version }}
+      - name: Push opcional ao GHCR (futuro; o artefato oficial e o asset da release)
+        continue-on-error: true
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          docker tag "kernel-harness/harness:${V}" "ghcr.io/rangeltech/kernel-harness/harness:${V}"
+          docker push "ghcr.io/rangeltech/kernel-harness/harness:${V}"
       - name: Manifesto
         run: |
-          DIGEST="${{ steps.build.outputs.digest }}"
-          cat > release-manifest.json <<EOF
-          {
+          python3 - <<'PY'
+          import json, os, datetime
+          v = "${{ steps.v.outputs.version }}"
+          m = {
             "schema": 1,
             "service": "kernel-harness",
             "repo": "RangelTech/kernel-harness",
-            "commit": "${GITHUB_SHA::7}",
-            "version": "${{ steps.v.outputs.version }}",
-            "image": "ghcr.io/rangeltech/kernel-harness/harness@${DIGEST}",
-            "built_at": "$(date -u +%FT%TZ)",
+            "commit": os.environ["GITHUB_SHA"][:7],
+            "version": v,
+            "artifact": {
+              "type": "docker-archive",
+              "asset": "image.tar.gz",
+              "sha256": os.environ["ARCHIVE_SHA"],
+              "image_id": os.environ["IMAGE_ID"],
+              "tag": "kernel-harness/harness:" + v
+            },
+            "built_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             "contracts": {"api": "0.1.0"},
             "healthcheck": {"path": "/health", "expect": 200, "timeout_s": 60, "port": 8080},
             "env": {"required": []},
             "resources": {"memory": "512m", "cpus": "0.5"}
           }
-          EOF
-          python3 -c "import json;json.load(open('release-manifest.json'))"
-      - name: GitHub Release com o manifesto
+          json.dump(m, open("release-manifest.json", "w"), indent=2)
+          PY
+          cat release-manifest.json
+      - name: GitHub Release com manifesto e imagem
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.v.outputs.version }}" release-manifest.json --title "${{ steps.v.outputs.version }}" --notes "Imagem: $(python3 -c "import json;print(json.load(open('release-manifest.json'))['image'])")" --target "${GITHUB_SHA}" || gh release upload "${{ steps.v.outputs.version }}" release-manifest.json --clobber
+          V="${{ steps.v.outputs.version }}"
+          gh release create "$V" release-manifest.json image.tar.gz --title "$V" --notes "Artefato docker-archive (sha256 no manifesto). Deploy: somente vps_rt_infra." --target "${GITHUB_SHA}" || gh release upload "$V" release-manifest.json image.tar.gz --clobber
