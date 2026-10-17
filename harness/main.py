@@ -10,6 +10,9 @@ app = FastAPI(title="kernel-harness", version=__version__)
 
 @app.get("/health")
 def health() -> dict:
+    # TESTE DE ROLLBACK (nao mesclar): passa no gate local, falha em producao (RT_ENV=prod)
+    if os.environ.get("RT_ENV") == "prod":
+        raise RuntimeError("falha proposital de teste de rollback")
     return {"status": "ok", "service": "kernel-harness", "version": __version__}
 
 
