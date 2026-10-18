@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rangeltech.net/contracts/kernel-harness/v1/cancel.schema.json",
+  "title": "POST /v1/runs/{id}/cancel",
+  "$defs": {
+    "request": {"type": "object", "properties": {"tenant_id": {"type": "string"}}},
+    "response": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {"status": {"enum": ["cancelling", "cancelled", "already_finished"]}}
+    }
+  }
+}

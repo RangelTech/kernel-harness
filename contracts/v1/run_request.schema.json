@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rangeltech.net/contracts/kernel-harness/v1/run_request.schema.json",
+  "title": "RunRequest v1 (POST /v1/runs)",
+  "type": "object",
+  "required": ["contract_version", "run_id", "idempotency_key", "tenant_id", "chat_id",
+               "template", "message", "manifest", "run_token"],
+  "properties": {
+    "contract_version": {"const": 1},
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$"},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 255, "pattern": "^[\\x21-\\x7e]+$"},
+    "tenant_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$"},
+    "user_id": {"type": ["string", "null"], "maxLength": 64, "pattern": "^[A-Za-z0-9._-]*$"},
+    "actor": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["member", "external"]},
+        "name": {"type": "string"},
+        "role": {"type": "string"}
+      }
+    },
+    "chat_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$"},
+    "channel": {"enum": ["web", "chatwoot", "api"]},
+    "inbox_id": {"type": ["string", "null"]},
+    "message_id": {"type": "string"},
+    "template": {
+      "type": "object",
+      "required": ["id", "version_id", "kind"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$"},
+        "version_id": {"type": "string", "minLength": 1},
+        "kind": {"const": "skills"}
+      }
+    },
+    "message": {"type": "string", "minLength": 1},
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name"],
+        "properties": {
+          "kind": {"enum": ["image", "audio", "pdf", "doc"]},
+          "name": {"type": "string"},
+          "storage_ref": {"type": ["string", "null"]},
+          "extracted_text": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {"role": {"enum": ["user", "assistant"]}, "content": {"type": "string"}}
+      }
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "alias": {"type": "string"},
+        "reasoning_effort": {"enum": ["low", "medium", "high"]}
+      }
+    },
+    "skills": {
+      "type": "object",
+      "properties": {
+        "system_rev": {"type": "string"},
+        "tenant_package": {
+          "type": "object",
+          "required": ["sha256"],
+          "properties": {
+            "sha256": {"type": "string"},
+            "url": {"type": ["string", "null"]},
+            "files": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "object",
+                "required": ["path", "content"],
+                "properties": {"path": {"type": "string"}, "content": {"type": "string"}}
+              }
+            }
+          }
+        },
+        "user_skills": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {"type": "string"},
+              "description": {"type": "string"},
+              "content": {"type": ["string", "null"]}
+            }
+          }
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": ["tools"],
+      "properties": {
+        "tools": {"type": "array", "items": {"type": "string"}},
+        "credential_grants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {"kind": {"type": "string"}, "id": {"type": ["string", "null"]}}
+          }
+        },
+        "environment": {"type": "object", "properties": {"enabled": {"type": "boolean"}}},
+        "limits": {
+          "type": "object",
+          "properties": {
+            "max_turns": {"type": "integer", "minimum": 1},
+            "turn_timeout_s": {"type": "number", "minimum": 1},
+            "idle_timeout_s": {"type": "number", "minimum": 1},
+            "max_tool_calls_per_turn": {"type": "integer", "minimum": 5, "maximum": 200},
+            "pix_max_amount": {"type": ["string", "number"]},
+            "max_recipients": {"type": "integer", "minimum": 1},
+            "http_allowed_hosts": {"type": "array", "items": {"type": "string"}},
+            "write_tables": {"type": "array", "items": {"type": "string"}},
+            "tenant_concurrency": {"type": "integer", "minimum": 1},
+            "external_approval": {"enum": ["deny", "human"]}
+          }
+        }
+      }
+    },
+    "credentials": {"type": "object"},
+    "credentials_catalog": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "label"],
+        "properties": {"kind": {"type": "string"}, "label": {"type": "string"}}
+      }
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "recall": {
+          "type": "array",
+          "items": {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}}}
+        }
+      }
+    },
+    "run_token": {"type": "string", "minLength": 10}
+  }
+}

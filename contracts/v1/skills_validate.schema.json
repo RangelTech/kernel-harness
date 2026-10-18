@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rangeltech.net/contracts/kernel-harness/v1/skills_validate.schema.json",
+  "title": "POST /v1/skills/validate",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["files"],
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {"type": "object", "required": ["path"],
+                    "properties": {"path": {"type": "string"}, "content": {"type": "string"},
+                                   "content_b64": {"type": "string"}}}
+        },
+        "manifest": {"type": "object", "properties": {"tools": {"type": "array", "items": {"type": "string"}}}},
+        "available_tools": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["ok", "problems"],
+      "properties": {
+        "ok": {"type": "boolean"},
+        "problems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "message", "severity"],
+            "properties": {
+              "path": {"type": ["string", "null"]}, "line": {"type": ["integer", "null"]},
+              "code": {"enum": ["missing_agent_md", "bad_frontmatter", "bad_name", "duplicate_name",
+                                "file_too_large", "package_too_large", "too_many_files", "bad_path",
+                                "bad_encoding", "secret_detected", "unknown_tool",
+                                "broken_reference", "bad_extension"]},
+              "message": {"type": "string"},
+              "severity": {"enum": ["error", "warning"]}
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rangeltech.net/contracts/kernel-harness/v1/error_response.schema.json",
+  "title": "Resposta de erro HTTP (4xx/5xx antes do stream)",
+  "type": "object",
+  "required": ["detail", "code"],
+  "properties": {
+    "detail": {"type": "string"},
+    "code": {"enum": ["unauthorized", "forbidden", "invalid_request", "idempotency_conflict",
+                      "backpressure", "not_found", "bad_run_token", "unsupported_contract",
+                      "tool_not_allowed", "no_active_run", "foreign_session"]},
+    "problems": {"type": "array"}
+  }
+}
