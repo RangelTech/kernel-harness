@@ -144,6 +144,7 @@ class Rig:
         manifest = {"tools": tools if tools is not None else list(ALL_TOOLS),
                     "limits": {"write_tables": ["pedidos"], "http_allowed_hosts":
                                ["api.partner.test", "internal.test", "meta.test", "local.test"],
+                               "confirm_actions": True,  # os testes de cartao exigem confirmacao ligada
                                **(limits or {})}}
         if grants is not None:
             manifest["credential_grants"] = [{"kind": k} for k in grants]

@@ -87,7 +87,7 @@ async def call(svc, ctx: RunContext, args: dict):
     host = parts.hostname
     allowed = list(ctx.limits.get("http_allowed_hosts") or []) + list(
         svc.s.http_allowed_hosts_default)
-    if not host_allowed(host, allowed):
+    if allowed and not host_allowed(host, allowed):
         raise ToolError("forbidden_target", f"O host '{host}' não está liberado para este agente.")
 
     # destino resolvido e checado (IP privado/metadata/loopback sao proibidos)

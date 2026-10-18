@@ -311,7 +311,7 @@ def validate_write(statement: str, allowed_tables: list[str]) -> str:
     table = m.group(1).strip("\"'`").lower()
     normalized = {t.lower() for t in allowed_tables}
     bare = table.split(".")[-1]
-    if table not in normalized and bare not in normalized:
+    if "*" not in normalized and table not in normalized and bare not in normalized:
         raise ValueError(f"tabela '{table}' não está na lista de escrita permitida deste template")
     return bare
 

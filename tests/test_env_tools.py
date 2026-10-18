@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+from tests.conftest import S_MP
 from tests.test_broker import last_result, tool
 
 
@@ -189,3 +190,34 @@ def test_rm_tenant_id_is_valid_for_the_runtime_manager():
     from broker.env import rm_tenant
     t = rm_tenant("7b1f2c3d-aaaa-bbbb-cccc-1234567890ab")
     assert re.fullmatch(r"[a-z][a-z0-9]{3,19}", t) and t == "t7b1f2c3daaaa"
+
+
+async def test_default_is_full_freedom_no_confirmation_card(rig):
+    """Padrao do produto: sem confirm_actions o agente age direto (confirmar e papo da conversa)."""
+    ev = await rig.send(rig.body(message=tool("rt_env_expose", {"app": "livre", "port": 4000}) + "[[echo]]",
+                                 limits={"confirm_actions": False}))
+    res = json.loads(ev[-1].data["text"])
+    assert res["ok"], res
+    assert not [e for e in ev if e.type == "approval_required"]
+    assert rig.ext.exposures["t1"][-1]["app"] == "livre"
+
+
+async def test_env_exec_injects_named_secrets_as_environment_and_never_leaks_them(rig):
+    res = await last_result(rig, tool("rt_env_exec", {
+        "command": "python pix.py", "secrets": ["MERCADO_PAGO_TOKEN"]}))
+    assert res["ok"], res
+    call = next(c for c in rig.ext.rm_calls if c["path"].endswith("workspace:exec"))
+    assert call["body"]["env"]["MERCADO_PAGO_TOKEN"] == S_MP
+    assert S_MP not in json.dumps(res)
+    res = await last_result(rig, tool("rt_env_exec", {"command": "x", "secrets": ["NAO_EXISTE"]}))
+    assert res["error"]["code"] == "invalid_args"
+
+
+async def test_sql_write_without_table_list_allows_any_table_but_never_ddl(rig):
+    for stmt, ok in (("INSERT INTO qualquer (a) VALUES (1)", True), ("DROP TABLE pedidos", False)):
+        res = await last_result(rig, tool("rt_sql_write", {"statement": stmt}),
+                                limits={"write_tables": [], "confirm_actions": False})
+        if ok:
+            assert res["ok"] or res["error"]["code"] == "tool_error", res
+        else:
+            assert res["error"]["code"] == "guardrail"
