@@ -40,9 +40,11 @@
         "type": "object",
         "required": ["kind", "name"],
         "properties": {
-          "kind": {"enum": ["image", "audio", "pdf", "doc"]},
+          "kind": {"type": "string", "minLength": 1, "maxLength": 40},
           "name": {"type": "string"},
+          "content_type": {"type": ["string", "null"]},
           "storage_ref": {"type": ["string", "null"]},
+          "storage_path": {"type": ["string", "null"]},
           "extracted_text": {"type": ["string", "null"]}
         }
       }

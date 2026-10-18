@@ -8,7 +8,7 @@ description: Instalar o Apache Airflow no ambiente da empresa para orquestrar ro
 Uso típico: pipelines que rodam em horários, com histórico e tela de acompanhamento. Para tarefas simples de aviso/e-mail diário, prefira `orquestracao-e-rotinas` (agendamento da plataforma).
 
 1. Estado do ambiente: `rt_env_status`.
-2. Ambiente Python isolado:
+2. Ambiente Python isolado — a instalação é demorada: rode **em segundo plano com log** (veja `ambiente-do-cliente`, "Tarefas longas") e acompanhe com `tail`:
    `apt-get update && apt-get install -y python3-venv python3-dev build-essential`
    `python3 -m venv /opt/airflow-venv`
    Instale com as constraints oficiais da versão do Python do ambiente (`python3 --version`):

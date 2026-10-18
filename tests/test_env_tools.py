@@ -221,3 +221,46 @@ async def test_sql_write_without_table_list_allows_any_table_but_never_ddl(rig):
             assert res["ok"] or res["error"]["code"] == "tool_error", res
         else:
             assert res["error"]["code"] == "guardrail"
+
+
+def _with_attachment(rig, name=b"planilha.xlsx", data=b"XLSXBYTES", kind="doc"):
+    ref = "tenants/t1/chats/attachments/x/" + name.decode()
+    rig.backend.attachment_files[ref] = data
+    return {"extra": {"attachments": [{"kind": kind, "name": name.decode(), "storage_path": ref,
+                                       "content_type": "application/octet-stream"}]}}
+
+
+async def test_executor_reads_any_attachment_as_input_file(rig):
+    kw = _with_attachment(rig)
+    res = await last_result(rig, tool("rt_executor_run", {
+        "script": "print(open('/in/planilha.xlsx','rb').read())", "attachments": ["planilha.xlsx"]}), **kw)
+    assert res["ok"], res
+    call = next(c for c in rig.ext.rm_calls if c["path"] == "/v1/executor/runs")
+    import base64 as b64
+    assert b64.b64decode(call["body"]["inputs"]["planilha.xlsx"]) == b"XLSXBYTES"
+    res = await last_result(rig, tool("rt_executor_run", {"script": "x", "attachments": ["outro.bin"]}), **kw)
+    assert res["error"]["code"] == "invalid_args" and "planilha.xlsx" in res["error"]["message"]
+
+
+async def test_attachment_goes_to_workspace_and_result_file_comes_back_as_artifact(rig):
+    kw = _with_attachment(rig, b"video.mp4", b"MP4DATA", "video")
+    res = await last_result(rig, tool("rt_env_upload", {"attachment": "video.mp4"}), **kw)
+    assert res["result"] == {"path": "/workspace/inbox/video.mp4", "size": 7}
+    assert rig.ext.rm_files["/workspace/inbox/video.mp4"] == b"MP4DATA"
+    rig.ext.rm_files["/workspace/out/resultado.xlsx"] = b"EDITADO"
+    res = await last_result(rig, tool("rt_env_download", {"path": "/workspace/out/resultado.xlsx"}))
+    art = res["result"]["artifact"]
+    assert art["title"] == "resultado.xlsx" and rig.backend.files[art["artifact_id"]] == b"EDITADO"
+    res = await last_result(rig, tool("rt_env_download", {"path": "/workspace/nao-existe"}))
+    assert not res["ok"]
+
+
+def test_run_request_accepts_any_attachment_kind():
+    import json
+    import pathlib
+
+    import jsonschema
+    schema = json.loads(pathlib.Path("contracts/v1/run_request.schema.json").read_text(encoding="utf-8"))
+    att = schema["properties"]["attachments"]["items"]
+    for kind in ("image", "audio", "video", "file", "pdf"):
+        jsonschema.validate({"kind": kind, "name": "a", "storage_path": "x"}, att)

@@ -5,9 +5,14 @@ Todas operam SO no ambiente da empresa da run (escopo = tenant_id).
 """
 from __future__ import annotations
 
+import base64
+import posixpath
 import re
 
+from broker import attachments as attachments_mod
+from broker.artifacts import put_artifact
 from broker.errors import ToolError
+from broker.executor import _KIND as KIND_BY_EXT
 from broker.rm import RMClient
 from harness.runctx import RunContext
 
@@ -103,6 +108,35 @@ def _command_env(ctx: RunContext, wanted) -> dict[str, str]:
     if missing:
         raise ToolError("invalid_args", "Segredo(s) nao cadastrado(s): " + ", ".join(missing))
     return {n: have[n] for n in names}
+
+
+async def upload(svc, ctx: RunContext, args: dict):
+    """Anexo da conversa -> arquivo no ambiente da empresa (para o agente trabalhar nele com o terminal)."""
+    name = str(args.get("attachment") or "")
+    data = await attachments_mod.read(svc, ctx, name)
+    base = attachments_mod.find(ctx, name)["name"]
+    path = str(args.get("path") or f"/workspace/inbox/{base}")
+    rmt = rm_tenant(ctx.tenant_id)
+    await _rm(svc).call("POST", f"/v1/tenants/{rmt}/workspace:put", scope=rmt, timeout=300.0,
+                        body={"path": path, "content_base64": base64.b64encode(data).decode()})
+    return {"path": path, "size": len(data)}
+
+
+async def download(svc, ctx: RunContext, args: dict):
+    """Arquivo do ambiente -> artefato da conversa (o usuario recebe o link/arquivo)."""
+    path = str(args.get("path") or "")
+    if not path.startswith("/"):
+        raise ToolError("invalid_args", "Informe o caminho completo do arquivo no ambiente.")
+    rmt = rm_tenant(ctx.tenant_id)
+    res = await _rm(svc).call("POST", f"/v1/tenants/{rmt}/workspace:get", scope=rmt, timeout=300.0,
+                              body={"path": path})
+    data = base64.b64decode(res.get("content_base64") or "")
+    base = posixpath.basename(path)
+    ext = base.rsplit(".", 1)[-1].lower() if "." in base else "bin"
+    kind, ctype = KIND_BY_EXT.get(ext, ("file", "application/octet-stream"))
+    art = await put_artifact(svc, ctx, kind=kind, title=str(args.get("name") or base)[:120],
+                             data=data, extension=ext[:8], content_type=ctype)
+    return {"artifact": art, "size": len(data)}
 
 
 async def exec_(svc, ctx: RunContext, args: dict):

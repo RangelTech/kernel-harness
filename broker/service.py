@@ -57,6 +57,8 @@ TOOLS: dict[str, ToolSpec] = {
     "rt_env_status": ToolSpec(env_mod.status),
     "rt_env_start": ToolSpec(env_mod.start),
     "rt_env_exec": ToolSpec(env_mod.exec_),
+    "rt_env_upload": ToolSpec(env_mod.upload),
+    "rt_env_download": ToolSpec(env_mod.download),
     "rt_env_stop": ToolSpec(env_mod.stop),
     "rt_env_backup": ToolSpec(env_mod.backup),
     "rt_env_expose": ToolSpec(env_mod.expose),

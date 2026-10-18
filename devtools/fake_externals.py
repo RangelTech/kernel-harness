@@ -29,6 +29,7 @@ class FakeExternals:
         self.rm_exec_exit = 0
         self.rm_autocreate = True  # False: o ambiente so nasce no rt_env_start
         self.rm_ws: dict[str, dict] = {}
+        self.rm_files: dict[str, bytes] = {}
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle))
@@ -87,6 +88,15 @@ class FakeExternals:
         if rest == "workspace:stop":
             ws["running"] = False
             return httpx.Response(200, json=view)
+        if rest == "workspace:put":
+            self.rm_files[body["path"]] = base64.b64decode(body["content_base64"])
+            return httpx.Response(200, json={"path": body["path"], "size": len(self.rm_files[body["path"]])})
+        if rest == "workspace:get":
+            data = self.rm_files.get(body["path"])
+            if data is None:
+                return httpx.Response(404, json={"error": "file_not_found"})
+            return httpx.Response(200, json={"path": body["path"], "size": len(data),
+                                             "content_base64": base64.b64encode(data).decode()})
         if rest == "workspace:exec":
             if not ws["running"]:
                 return httpx.Response(409, json={"error": "workspace_not_running"})

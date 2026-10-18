@@ -6,8 +6,9 @@ description: Instalar o Metabase (BI) no ambiente da empresa, deixá-lo rodando 
 # Metabase no ambiente
 
 1. Estado do ambiente: `rt_env_status` (inicie se precisar).
-2. Java: `apt-get update && apt-get install -y default-jre-headless`.
-3. Programa: `mkdir -p /opt/metabase && cd /opt/metabase && curl -fsSL -o metabase.jar https://downloads.metabase.com/latest/metabase.jar` (confira o tamanho do arquivo antes de seguir).
+2. Instalação **em segundo plano** (veja `ambiente-do-cliente`, "Tarefas longas"): Java e o programa juntos, com log:
+   `mkdir -p /workspace/logs /opt/metabase && setsid nohup bash -c 'apt-get update && apt-get install -y default-jre-headless && curl -fsSL -o /opt/metabase/metabase.jar https://downloads.metabase.com/latest/metabase.jar && echo INSTALADO' > /workspace/logs/metabase-install.log 2>&1 < /dev/null & echo iniciado`
+3. Acompanhe com `tail -n 5 /workspace/logs/metabase-install.log` até aparecer `INSTALADO` (confira o tamanho do .jar: dezenas de MB).
 4. Dados do próprio Metabase em disco persistente: `mkdir -p /workspace/metabase-data`.
 5. Serviço:
    `rt-service add metabase --cwd /opt/metabase --env MB_DB_FILE=/workspace/metabase-data/metabase.db --env MB_JETTY_PORT=3000 --env MB_JETTY_HOST=0.0.0.0 -- java -Xmx1g -jar /opt/metabase/metabase.jar`

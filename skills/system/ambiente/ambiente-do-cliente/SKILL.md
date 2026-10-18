@@ -19,6 +19,13 @@ O ambiente é um servidor Linux (Debian) só da empresa, ligado ao agente pelo t
 4. **Nunca** use `nohup ... &` nem deixe processo solto: ele morre no reinício. Use a skill `servicos-no-ambiente`.
 5. Para o mundo externo enxergar algo, use a skill `publicar-app`. O ambiente não tem IP público próprio.
 
+## Tarefas longas (instalações, downloads, builds)
+Cada resposta sua tem um tempo limite (~9 min). **Nunca espere uma instalação grande no mesmo comando.** Rode em segundo plano, com log, e acompanhe em chamadas curtas:
+1. `mkdir -p /workspace/logs && setsid nohup bash -c '<comandos longos>' > /workspace/logs/<nome>.log 2>&1 < /dev/null & echo iniciado`
+2. Acompanhe: `tail -n 20 /workspace/logs/<nome>.log` e `pgrep -af <programa>` a cada poucos minutos.
+3. Só passe para o próximo passo quando o log mostrar o fim (ou o arquivo esperado existir).
+Isso vale para `apt-get install`, `pip install` grandes, downloads de arquivos pesados e builds. Se a conversa for retomada depois, o log mostra onde parou.
+
 ## Regras
 - Não guarde senhas, chaves ou tokens em arquivos do ambiente; use `rt_http` com `{{secret:NOME}}` e as ferramentas da plataforma, que mantêm os segredos fora do ambiente.
 - Respeite os limites de CPU, memória e disco do plano; se faltar recurso, avise o usuário em vez de insistir.

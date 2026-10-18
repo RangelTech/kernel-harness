@@ -57,9 +57,12 @@ def build_instructions(agent_md: str, recall: list[dict], catalog: list[dict],
 def render_input(body: dict) -> str:
     text = body["message"]
     for a in body.get("attachments") or []:
-        head = f"\n\n[Anexo: {a.get('name')} ({a.get('kind')})"
-        if a.get("storage_ref"):
-            head += f" ref={a['storage_ref']}"
+        head = f"\n\n[Anexo: {a.get('name')} ({a.get('kind')}"
+        if a.get("content_type"):
+            head += f", {a['content_type']}"
+        nm = a.get("name")
+        head += ("); arquivo disponível: leia no código com rt_executor_run "
+                 f"(attachments=[\"{nm}\"], chega em /in/{nm}) ou envie ao ambiente com rt_env_upload")
         head += "]"
         extracted = a.get("extracted_text")
         text += head + (f"\n{extracted[:30_000]}" if extracted else "")
@@ -95,6 +98,10 @@ class Dispatcher:
             worker_id=grant.worker.id, manifest=body.get("manifest") or {},
             credentials=creds, run_token=body.get("run_token", ""),
             redactor=Redactor.from_credentials(creds))
+        ctx.attachments = [
+            {"name": a.get("name"), "kind": a.get("kind"), "content_type": a.get("content_type"),
+             "ref": a.get("storage_ref") or a.get("storage_path")}
+            for a in body.get("attachments") or [] if a.get("name")]
         ctx.redactor.values.extend(v for v in [ctx.run_token] if v and len(v) >= 6)
         ctx.emit = lambda t, d: self.bus.publish(ctx.run_id, t, d, ctx)
         return ctx
