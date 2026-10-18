@@ -18,6 +18,7 @@ class FakeBackend:
         self.approvals: dict[str, dict] = {}
         self.artifacts: dict[str, dict] = {}
         self.files: dict[str, bytes] = {}
+        self.attachment_files: dict[str, bytes] = {}
         self.charges: dict[str, dict] = {}
         self.user_skills: dict[tuple[str, str], list[dict]] = {}
         self.docs: list[dict] = []
@@ -67,6 +68,9 @@ class FakeBackend:
 
     async def lookup_charge(self, run_id, token, reference_id):
         return self.charges.get(reference_id)
+
+    async def fetch_file(self, run_id, token, ref):
+        return self.attachment_files[ref]
 
     async def schedule_op(self, run_id, token, payload):
         op = payload.get("op")

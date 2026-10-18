@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 
+from broker import attachments as attachments_mod
 from broker.artifacts import put_artifact
 from broker.errors import ToolError
 from broker.rm import RMClient
@@ -18,7 +19,12 @@ _KIND = {"png": ("image", "image/png"), "jpg": ("image", "image/jpeg"),
          "json": ("file", "application/json"), "pdf": ("file", "application/pdf"),
          "xlsx": ("file", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
          "html": ("html", "text/html"), "txt": ("file", "text/plain"),
-         "md": ("file", "text/markdown")}
+         "md": ("file", "text/markdown"),
+         "mp3": ("file", "audio/mpeg"), "wav": ("file", "audio/wav"), "ogg": ("file", "audio/ogg"),
+         "m4a": ("file", "audio/mp4"), "mp4": ("file", "video/mp4"), "mov": ("file", "video/quicktime"),
+         "webm": ("file", "video/webm"), "zip": ("file", "application/zip"),
+         "docx": ("file", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+         "pptx": ("file", "application/vnd.openxmlformats-officedocument.presentationml.presentation")}
 MAX_STD = 8000
 
 
@@ -35,6 +41,10 @@ async def run(svc, ctx: RunContext, args: dict):
         inputs[str(name)] = base64.b64encode(str(val).encode("utf-8")).decode()
     for name, val in (args.get("inputs_b64") or {}).items():
         inputs[str(name)] = str(val)
+    for name in args.get("attachments") or []:
+        # anexo da conversa vira /in/<nome> (qualquer tipo: planilha, imagem, audio, video, pdf...)
+        data = await attachments_mod.read(svc, ctx, str(name))
+        inputs[attachments_mod.find(ctx, str(name))["name"]] = base64.b64encode(data).decode()
     try:
         timeout = max(5, min(int(args.get("timeout_s") or 60), 120))
     except (TypeError, ValueError):

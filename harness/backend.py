@@ -44,6 +44,7 @@ class Backend(Protocol):
     async def recall_memories(self, run_id: str, token: str, payload: dict) -> list[dict]: ...
     async def fetch_package(self, url: str) -> dict: ...
     async def schedule_op(self, run_id: str, token: str, payload: dict) -> dict: ...
+    async def fetch_file(self, run_id: str, token: str, ref: str) -> bytes: ...
     async def aclose(self) -> None: ...
 
 
@@ -113,6 +114,14 @@ class HttpBackend:
         if r.status_code >= 400:
             raise BackendError(r.status_code, r.text)
         return r.json()
+
+    async def fetch_file(self, run_id, token, ref):
+        """Bytes de um anexo da empresa da run (o backend confere que o caminho e da empresa)."""
+        r = await self.http.get(f"{self.s.backend_url}/internal/runs/{run_id}/files",
+                                params={"ref": ref}, headers=self._h(token), timeout=300.0)
+        if r.status_code >= 400:
+            raise BackendError(r.status_code, r.text[:200])
+        return r.content
 
     async def schedule_op(self, run_id, token, payload):
         return await self._post(f"/internal/runs/{run_id}/schedules", token, payload)

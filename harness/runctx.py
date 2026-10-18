@@ -62,6 +62,7 @@ class RunContext:
     read_cache: dict = field(default_factory=dict)
     emitted_artifacts: set = field(default_factory=set)
     pix_results: dict = field(default_factory=dict)
+    attachments: list = field(default_factory=list)  # [{name, kind, content_type, ref}]
     # aprovacoes
     approvals: dict[str, ApprovalWait] = field(default_factory=dict)
     paused_total: float = 0.0

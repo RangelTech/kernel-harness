@@ -117,6 +117,8 @@ TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
         "em /out (png, csv, pdf, xlsx...) viram artefatos na conversa. Use para graficos, calculos e PDFs.",
         _obj({"script": {**_S, "description": "Codigo Python completo"},
               "inputs": {"type": "object", "description": "nome do arquivo -> conteudo texto"},
+              "attachments": {"type": "array", "items": _S,
+                              "description": "Nomes de anexos da conversa a ler em /in/<nome>"},
               "timeout_s": _N}, ["script"]),
     ),
     "rt_env_status": ("Estado do ambiente da empresa, apps publicados e consumo.", _obj({})),
@@ -175,6 +177,16 @@ TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
     "rt_memory_recall": (
         "Recupera memorias/preferencias que o usuario ja informou, relevantes a uma consulta.",
         _obj({"query": _S}, ["query"]),
+    ),
+    "rt_env_upload": (
+        "Copia um anexo da conversa (qualquer arquivo: planilha, imagem, audio, video, pdf...) para o "
+        "ambiente da empresa (padrao /workspace/inbox/<nome>) para trabalhar nele com o terminal.",
+        _obj({"attachment": {**_S, "description": "Nome do anexo"}, "path": _S}, ["attachment"]),
+    ),
+    "rt_env_download": (
+        "Entrega ao usuario um arquivo do ambiente (qualquer tipo): vira artefato com link na conversa.",
+        _obj({"path": {**_S, "description": "Caminho completo, ex.: /workspace/out/relatorio.xlsx"}, "name": _S},
+             ["path"]),
     ),
     "rt_env_exec": (
         "Terminal do ambiente da empresa: roda um comando bash (instalar programas, escrever e rodar "
