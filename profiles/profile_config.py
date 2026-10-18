@@ -43,6 +43,32 @@ FORBIDDEN_TOOLSETS = {"terminal", "file", "code_execution", "browser", "cronjob"
                       "tts", "kanban", "computer_use", "connections", "clarify"}
 # terminal+file so existem quando o AMBIENTE da empresa esta habilitado (backend ssh).
 ENV_TOOLSETS = ["terminal", "file"]
+
+# Skills de sistema por grupo (pastas em <system_skills>/<grupo>): um agente so ve as skills dos grupos
+# cujas ferramentas o manifesto liga (uma skill nunca amplia o que o agente pode fazer). `core` sempre.
+SYSTEM_SKILL_GROUPS: dict[str, set[str] | None] = {
+    "core": None,
+    "pix": {"rt_pix_create", "rt_payment_status", "rt_mp_read"},
+    "dados": {"rt_sql_read", "rt_sql_write", "rt_sql_transaction", "rt_data_describe", "rt_mongo_find"},
+    "email": {"rt_email_send", "rt_email_list"},
+    "docs": {"rt_search_docs", "rt_memory_recall"},
+    "api": {"rt_http"},
+    "analise": {"rt_executor_run"},
+    "rotinas": {"rt_job_schedule", "rt_schedule_create", "rt_schedule_list", "rt_schedule_pause",
+                "rt_schedule_delete"},
+    "ambiente": {"rt_env_manage", "rt_env_status", "rt_env_start", "rt_env_stop", "rt_env_backup",
+                 "rt_env_expose", "rt_env_unexpose", "rt_env_domain_add", "rt_env_domain_verify"},
+}
+
+
+def system_skill_dirs(system_root: str, tools: list[str], environment_enabled: bool) -> list[str]:
+    have = set(tools)
+    out = []
+    for group, needs in SYSTEM_SKILL_GROUPS.items():
+        on = needs is None or bool(have & needs) or (group == "ambiente" and environment_enabled)
+        if on:
+            out.append(f"{system_root.rstrip('/')}/{group}")
+    return out
 ALWAYS_DISABLED = ["cronjob", "delegation", "browser", "tts", "kanban", "computer_use", "connections"]
 
 
@@ -179,7 +205,8 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
     _validate_manifest(m)
     cfg = load_base()
 
-    ext = [paths.system_skills, f"{paths.tenant_skills_root}/{template}/{template_version}"]
+    ext = system_skill_dirs(paths.system_skills, m.tools, m.environment.enabled)
+    ext.append(f"{paths.tenant_skills_root}/{template}/{template_version}")
     if user:
         ext.append(f"{paths.users_root}/{tenant}/{user}/skills")
     ext = [p.rstrip("/") for p in ext]
