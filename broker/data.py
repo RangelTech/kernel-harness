@@ -178,9 +178,7 @@ async def mongo_find(svc, ctx: RunContext, args: dict):
 
 def _write_tables(ctx: RunContext) -> list[str]:
     tables = ctx.limits.get("write_tables") or []
-    if not tables:
-        raise ToolError("guardrail", "Este agente não tem tabelas liberadas para escrita.")
-    return list(tables)
+    return list(tables) if tables else ["*"]  # sem lista = qualquer tabela
 
 
 def _short(sql: str, n: int = 300) -> str:

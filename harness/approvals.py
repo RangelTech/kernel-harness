@@ -34,7 +34,14 @@ class ApprovalService:
 
     async def request(self, ctx: RunContext, *, kind: str, summary: str, risk: str,
                       details: dict | None = None) -> str:
-        """-> 'approved' | 'denied' | 'expired' | 'external_denied'."""
+        """-> 'approved' | 'denied' | 'expired' | 'external_denied'.
+
+        Padrao: o agente tem liberdade total e a confirmacao e feita na CONVERSA (skills). O cartao
+        de confirmacao autenticado so existe quando o template liga `limits.confirm_actions`.
+        """
+        if not ctx.limits.get("confirm_actions"):
+            log.info("acao sem cartao (confirm_actions desligado) run=%s kind=%s", ctx.run_id, kind)
+            return "approved"
         if ctx.channel == "schedule":
             # rotina agendada: ninguem esta na tela. So o que o dono autorizou ao criar a rotina
             # (envio de e-mail) segue; o resto (dinheiro, escrita, publicacao) e negado.

@@ -80,6 +80,31 @@ async def start(svc, ctx: RunContext, args: dict):
     return _view(v, rmt, svc.s.apps_base_domain)
 
 
+def available_secrets(ctx: RunContext) -> dict[str, str]:
+    """Segredos que o codigo do agente pode ler como variavel de ambiente (nome -> valor)."""
+    out: dict[str, str] = {}
+    creds = ctx.credentials or {}
+    if ctx.granted("secrets"):
+        for name, value in (creds.get("secrets") or {}).items():
+            out[re.sub(r"[^A-Za-z0-9_]", "_", str(name)).upper()] = str(value)
+    pay = creds.get("payment") or {}
+    if pay.get("access_token") and ctx.granted("mercado_pago"):
+        out["MERCADO_PAGO_TOKEN"] = str(pay["access_token"])
+    return out
+
+
+def _command_env(ctx: RunContext, wanted) -> dict[str, str]:
+    """Variaveis pedidas pelo agente (so os NOMES vem dele; o valor nunca passa pelo modelo)."""
+    if not wanted:
+        return {}
+    have = available_secrets(ctx)
+    names = [str(n).upper() for n in (wanted if isinstance(wanted, list) else [wanted])]
+    missing = [n for n in names if n not in have]
+    if missing:
+        raise ToolError("invalid_args", "Segredo(s) nao cadastrado(s): " + ", ".join(missing))
+    return {n: have[n] for n in names}
+
+
 async def exec_(svc, ctx: RunContext, args: dict):
     """Comando no terminal do ambiente da empresa (o agente nunca recebe chaves de acesso)."""
     command = str(args.get("command") or "")
@@ -90,9 +115,11 @@ async def exec_(svc, ctx: RunContext, args: dict):
     except (TypeError, ValueError):
         timeout = 60
     rmt = rm_tenant(ctx.tenant_id)
+    env = _command_env(ctx, args.get("secrets"))
     res = await _rm(svc).call(
         "POST", f"/v1/tenants/{rmt}/workspace:exec", scope=rmt, timeout=timeout + 30.0,
-        body={"command": command, "timeout_s": timeout, "cwd": str(args.get("cwd") or "/workspace")})
+        body={"command": command, "timeout_s": timeout, "cwd": str(args.get("cwd") or "/workspace"),
+              "env": env})
     out = {"exit_code": res.get("exit_code"), "stdout": res.get("stdout", ""),
            "stderr": res.get("stderr", "")}
     if res.get("exit_code") not in (0, None):

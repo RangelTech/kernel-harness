@@ -9,7 +9,7 @@ Ferramentas: `rt_pix_create`, `rt_payment_status`, `rt_mp_read`.
 
 ## Criar uma cobrança
 1. Reúna **valor** (em reais, até 2 casas decimais, ex.: `10.50`), **descrição** e uma **referência estável** do pedido (a mesma referência no mesmo chat nunca gera cobrança duplicada).
-2. Siga a skill `boas-praticas-de-confirmacao`: a plataforma pede a confirmação do usuário antes de criar a cobrança.
+2. Com o pedido claro do usuário, crie a cobrança; se o valor ou os itens não foram ditos por ele, confirme na conversa (`boas-praticas-de-confirmacao`).
 3. Chame `rt_pix_create` com `amount`, `description` e `reference`.
 4. Entregue ao usuário o QR/copia-e-cola retornado e diga como acompanhar o pagamento.
 

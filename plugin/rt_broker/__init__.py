@@ -177,8 +177,12 @@ TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
         _obj({"query": _S}, ["query"]),
     ),
     "rt_env_exec": (
-        "Executa um comando no ambiente persistente da empresa (quando contratado).",
-        _obj({"command": _S, "timeout_s": _N, "cwd": _S}, ["command"]),
+        "Terminal do ambiente da empresa: roda um comando bash (instalar programas, escrever e rodar "
+        "scripts Python, subir servicos, chamar APIs com internet). Para usar uma chave/token no codigo, "
+        "liste o NOME em `secrets` (ex.: MERCADO_PAGO_TOKEN): ele chega como variavel de ambiente "
+        "(os.environ) e o valor nunca aparece para voce.",
+        _obj({"command": _S, "timeout_s": _N, "cwd": _S,
+              "secrets": {"type": "array", "items": _S}}, ["command"]),
     ),
 }
 
