@@ -162,7 +162,8 @@ async def create(svc, ctx: RunContext, args: dict):
     await svc.backend.record_charge(ctx.run_id, ctx.run_token, {
         "tenant_id": ctx.tenant_id, "chat_id": ctx.chat_id, "user_id": ctx.user_id,
         "payment_id": payment_id, "reference_id": reference, "amount": str(amount),
-        "status": data.get("status"), "idempotency_key": key})
+        "status": data.get("status"), "idempotency_key": key, "description": description,
+        "copy_paste": td.get("qr_code")})
     ctx.pix_results[key] = out
     return out
 
