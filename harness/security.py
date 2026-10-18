@@ -35,8 +35,28 @@ def sign_run_token(claims: dict, secret: str) -> str:
     return f"{header}.{body}.{_b64url(sig)}"
 
 
+def _verify_backend_token(token: str, secret: str, now: float | None) -> dict:
+    """Formato emitido pelo backend (app/run_tokens.py): base64url(claims).base64url(hmac_sha256),
+    chave = sha256('run-token:' + segredo)."""
+    body, sig = token.split(".", 1)
+    key = hashlib.sha256(("run-token:" + secret).encode()).digest()
+    expected = _b64url(hmac.new(key, body.encode(), hashlib.sha256).digest())
+    if not hmac.compare_digest(sig, expected):
+        raise AuthError("bad_run_token", "assinatura do run_token invalida", 401)
+    try:
+        claims = json.loads(_b64url_dec(body))
+    except Exception as exc:  # noqa: BLE001
+        raise AuthError("bad_run_token", "run_token ilegivel", 401) from exc
+    exp = claims.get("exp")
+    if exp is None or (now or time.time()) >= float(exp):
+        raise AuthError("bad_run_token", "run_token expirado", 401)
+    return claims
+
+
 def verify_run_token(token: str, secret: str, *, now: float | None = None) -> dict:
     parts = token.split(".")
+    if len(parts) == 2:
+        return _verify_backend_token(token, secret, now)
     if len(parts) != 3:
         raise AuthError("bad_run_token", "run_token malformado", 401)
     header, body, sig = parts
