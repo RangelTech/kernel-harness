@@ -1,0 +1,103 @@
+# SOMENTE desenvolvimento/teste: kernel-harness + Hermes REAL (rt-hermes:dev) + LLM falso + backend falso.
+# Pre-requisito: docker build -f docker/hermes.Dockerfile -t rt-hermes:dev .   (repo kernel-harness)
+# Subir:  docker compose -f dev/compose.real.yml up -d --build
+name: harness-real
+
+x-hermes: &hermes
+  image: rt-hermes:dev
+  depends_on:
+    init-home: {condition: service_completed_successfully}
+    llm: {condition: service_started}
+  command: ["gateway", "run"]
+  environment:
+    RT_BROKER_URL: http://harness:8080/broker/v1/call
+    RT_BROKER_TOKEN: dev-broker-token
+    OPENAI_API_KEY: fake-provider-key-0000000000
+  volumes:
+    - profiles:/opt/data/profiles
+    - system_skills:/skills/system:ro
+    - tenant_skills:/skills/tenant:ro
+    - users:/srv/hermes/users:ro
+
+services:
+  init-home:
+    image: rt-hermes:dev
+    user: "0"
+    entrypoint: ["/opt/hermes/.venv/bin/python", "/initsrc/init_home.py"]
+    environment: {HOMEDIRS: "/homes/1,/homes/2", LLM_URL: "http://llm:9000/v1", GWKEY: "7c1e9a4b2f6d8035a1b9c4e7d2f06a83", MAXCONC: "4"}
+    volumes:
+      - ./real:/initsrc:ro
+      - home1:/homes/1
+      - home2:/homes/2
+      - profiles:/opt/data/profiles
+      - tenant_skills:/skills/tenant
+      - users:/srv/hermes/users
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 3s, retries: 10}
+
+  llm:
+    image: python:3.12-slim
+    command: ["python", "-u", "/app/fake_llm.py"]
+    environment: {FAKE_LOG_SYS: "1"}
+    volumes: ["./real:/app:ro", "llmlogs:/logs"]
+
+  backend:
+    build: {context: .., dockerfile: docker/harness.Dockerfile, target: dev}
+    command: ["python", "-m", "devtools.run_fake_backend"]
+    environment: {PORT: "8090"}
+    ports: ["8090:8090"]
+
+  hermes-w1:
+    <<: *hermes
+    ports: ["18642:8642"]
+    volumes:
+      - home1:/opt/data
+      - profiles:/opt/data/profiles
+      - system_skills:/skills/system:ro
+      - tenant_skills:/skills/tenant:ro
+      - users:/srv/hermes/users:ro
+
+  hermes-w2:
+    <<: *hermes
+    ports: ["18643:8642"]
+    volumes:
+      - home2:/opt/data
+      - profiles:/opt/data/profiles
+      - system_skills:/skills/system:ro
+      - tenant_skills:/skills/tenant:ro
+      - users:/srv/hermes/users:ro
+
+  harness:
+    build: {context: .., dockerfile: docker/harness.Dockerfile, target: prod}
+    user: "10000"
+    depends_on:
+      redis: {condition: service_healthy}
+      init-home: {condition: service_completed_successfully}
+    ports: ["8080:8080"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      HARNESS_SERVICE_TOKENS: dev-service-token
+      HARNESS_RUN_TOKEN_SECRET: dev-run-token-secret
+      HARNESS_BROKER_TOKENS: dev-broker-token
+      BACKEND_URL: http://backend:8090
+      BACKEND_INTERNAL_TOKEN: dev-internal-token
+      HERMES_MASTER_SECRET: dev-master-secret-0123456789abcdef
+      LITELLM_URL: http://llm:9000
+      HARNESS_WORKERS: >-
+        [{"id":"w1","url":"http://hermes-w1:8642","slots":4},
+         {"id":"w2","url":"http://hermes-w2:8642","slots":4}]
+      PROFILES_ROOT: /opt/data/profiles
+      USERS_ROOT: /srv/hermes/users
+      TENANT_SKILLS_ROOT: /skills/tenant
+      SYSTEM_SKILLS_DIR: /skills/system
+      HARNESS_TENANT_CONCURRENCY: "2"
+    volumes:
+      - profiles:/opt/data/profiles
+      - users:/srv/hermes/users
+      - tenant_skills:/skills/tenant
+      - system_skills:/skills/system
+
+volumes: {profiles: {}, users: {}, tenant_skills: {}, system_skills: {}, home1: {}, home2: {}, llmlogs: {}}

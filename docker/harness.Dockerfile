@@ -7,6 +7,7 @@ COPY harness ./harness
 COPY broker ./broker
 COPY contracts ./contracts
 COPY skills ./skills
+COPY profiles ./profiles
 ARG GIT_COMMIT=unknown
 ARG SOURCE_URL=https://github.com/RangelTech/kernel-harness
 ENV GIT_COMMIT=${GIT_COMMIT} PORT=8080 SYSTEM_SKILLS_DIR=/srv/skills/system
