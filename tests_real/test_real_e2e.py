@@ -162,8 +162,12 @@ def test_p2_worker_killed_midrun_is_not_reported_as_done():
     assert final(last)[0] == "done", final(last)
 
 
-def test_s0_system_skills_present_in_every_profile():
-    for tenant in ("ta", "tb"):
-        out = text_of(run(tenant=tenant, message='x\nCALL:skills_list|{}'))
-        for sk in ("pix-mercadopago", "sql-analista", "boas-praticas-de-confirmacao"):
-            assert sk in out, (tenant, sk)
+def test_s0_system_skills_follow_the_manifest_tools():
+    msg = 'x'+chr(10)+'CALL:skills_list|{}'
+    with_tools = text_of(run(tenant='ta', message=msg, manifest={'tools': ['rt_pix_create', 'rt_sql_read']}))
+    for sk in ('pix-mercadopago', 'sql-analista', 'boas-praticas-de-confirmacao'):
+        assert sk in with_tools, sk
+    assert 'subir-airflow' not in with_tools and 'email-e-agenda' not in with_tools
+    plain = text_of(run(tenant='tb', message=msg, manifest={'tools': ['rt_echo']}))
+    assert 'boas-praticas-de-confirmacao' in plain
+    assert 'pix-mercadopago' not in plain and 'sql-analista' not in plain
