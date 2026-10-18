@@ -250,7 +250,7 @@ async def test_b6_pix_requires_authenticated_confirmation_before_creating(rig):
     arts = [e for e in ev if e.type == "artifact"]
     assert len(arts) == 1 and arts[0].data["kind"] == "image"
     aid = arts[0].data["artifact_id"]
-    assert rig.ext.uploads[aid].startswith(b"\x89PNG")
+    assert rig.backend.files[aid].startswith(b"\x89PNG")
     assert rig.backend.artifacts[aid]["complete"]["title"].startswith("QR Code Pix")
     # cobranca registrada na plataforma
     assert rig.backend.charges["ped-1"]["payment_id"] == res["result"]["payment_id"]
@@ -374,7 +374,7 @@ async def test_b9_sql_read_makes_dataset_artifact_with_cache_warning(rig):
     assert "AVISO" in res["result"]  # segunda chamada igual no mesmo turno
     assert [e.type for e in ev].count("artifact") == 1
     aid = next(e.data["artifact_id"] for e in ev if e.type == "artifact")
-    stored = json.loads(rig.ext.uploads[aid])
+    stored = json.loads(rig.backend.files[aid])
     assert len(stored["rows"]) == 3 and stored["columns"][1]["name"] == "nome"
 
 
@@ -517,9 +517,9 @@ async def test_b11_artifact_put_roundtrip_and_validation(rig):
         "name": "contrato.pdf", "kind": "file",
         "content_base64": base64.b64encode(payload).decode()}))
     aid = res["result"]["artifact_id"]
-    assert rig.ext.uploads[aid] == payload
+    assert rig.backend.files[aid] == payload
     assert rig.backend.artifacts[aid]["init"]["extension"] == "pdf"
-    assert rig.backend.artifacts[aid]["init"]["tenant_id"] == "t1"
+    assert rig.backend.artifacts[aid]["init"]["kind"] == "file"
     res = await last_result(rig, tool("rt_artifact_put", {"name": "a", "kind": "file",
                                                           "content_base64": "@@@"}))
     assert res["error"]["code"] == "invalid_args"

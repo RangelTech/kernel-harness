@@ -2,6 +2,7 @@
 compose de dev, expoe os mesmos endpoints internos em HTTP (`build_http_app`)."""
 from __future__ import annotations
 
+import base64
 import uuid
 
 from fastapi import FastAPI, Request
@@ -16,6 +17,7 @@ class FakeBackend:
         self.memory_proposals: list[dict] = []
         self.approvals: dict[str, dict] = {}
         self.artifacts: dict[str, dict] = {}
+        self.files: dict[str, bytes] = {}
         self.charges: dict[str, dict] = {}
         self.user_skills: dict[tuple[str, str], list[dict]] = {}
         self.docs: list[dict] = []
@@ -51,14 +53,13 @@ class FakeBackend:
         self.approvals[aid] = {"run_id": run_id, **payload}
         return aid
 
-    async def artifact_register_init(self, run_id, token, payload):
+    async def artifact_put(self, run_id, token, payload):
         aid = str(uuid.uuid4())
-        self.artifacts[aid] = {"init": payload}
-        return {"artifact_id": aid, "upload_url": f"https://storage.fake/upload/{aid}"}
-
-    async def artifact_register_complete(self, run_id, token, payload):
-        self.artifacts.setdefault(payload["artifact_id"], {})["complete"] = payload
-        return {"ok": True}
+        data = base64.b64decode(payload["content_base64"])
+        self.files[aid] = data
+        meta = {k: v for k, v in payload.items() if k != "content_base64"}
+        self.artifacts[aid] = {"init": meta, "complete": meta, "size": len(data)}
+        return {"artifact_id": aid}
 
     async def record_charge(self, run_id, token, payload):
         self.charges[payload["reference_id"]] = {**self.charges.get(payload["reference_id"], {}),
@@ -140,6 +141,10 @@ def build_http_app(state: FakeBackend | None = None) -> FastAPI:
     @app.post("/internal/approvals")
     async def approvals(request: Request):
         return {"approval_id": await st.create_approval("", "", await request.json())}
+
+    @app.post("/internal/runs/{run_id}/artifacts/put")
+    async def art_put(run_id: str, request: Request):
+        return await st.artifact_put(run_id, "", await request.json())
 
     @app.post("/internal/runs/{run_id}/artifacts/register-init")
     async def reg_init(run_id: str, request: Request):

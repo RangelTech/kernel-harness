@@ -16,7 +16,7 @@ async def test_executor_returns_stdout_and_registers_chart_as_artifact(rig):
     assert out["exit_code"] == 0 and "ok" in out["stdout"]
     art = out["artifacts"][0]
     assert art["kind"] == "image" and art["title"] == "grafico.png"
-    assert rig.ext.uploads[art["artifact_id"]]  # imagem foi gravada no storage
+    assert rig.backend.files[art["artifact_id"]]  # imagem foi entregue ao backend
     call = next(c for c in rig.ext.rm_calls if c["path"] == "/v1/executor/runs")
     assert call["scope"] == "*" and call["sig"] is True
     assert "vendas.csv" in call["body"]["inputs"]  # entrada em base64
