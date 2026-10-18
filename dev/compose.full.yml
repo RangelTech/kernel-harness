@@ -40,7 +40,7 @@ services:
   llm:
     image: python:3.12-slim
     command: ["python", "-u", "/app/fake_llm.py"]
-    environment: {FAKE_LOG_SYS: "1"}
+    environment: {FAKE_LOG_SYS: "1", FAKE_REQUIRE_KEY: "fake-provider-key-0000000000"}
     volumes: ["./real:/app:ro", "llmlogs:/logs"]
 
   postgres:
@@ -100,6 +100,7 @@ services:
       BACKEND_URL: http://backend:8090
       BACKEND_INTERNAL_TOKEN: dev-internal-token
       HERMES_MASTER_SECRET: dev-master-secret-0123456789abcdef
+      LLM_WORKER_KEY: fake-provider-key-0000000000
       LITELLM_URL: http://llm:9000
       HARNESS_WORKERS: >-
         [{"id":"w1","url":"http://hermes-w1:8642","slots":4},

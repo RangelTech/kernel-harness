@@ -103,7 +103,8 @@ class RealProfileGenerator:
                          users_root=self.s.users_root, plugin_src=self.s.plugin_src,
                          llm_base_url=f"{self.s.litellm_url}/v1")
         r = pc.write_profile(self.s.profiles_root, tenant_id, template_id, user_id, m,
-                             self.s.hermes_master_secret, paths, template_version="current")
+                             self.s.hermes_master_secret, paths, template_version="current",
+                             llm_api_key=self.s.llm_worker_key)
         return {"home": r["path"], "config_hash": template_hash}
 
 
@@ -233,8 +234,10 @@ class ProfileManager:
         if user_id:
             user_dir = await self.materialize_user_skills(tenant_id, user_id,
                                                           skills.get("user_skills"))
+        key_fp = hashlib.sha256(self.s.llm_worker_key.encode()).hexdigest()[:12]
         h = template_hash(version_id=version_id, package_sha=(pkg or {}).get("sha256", ""),
-                          system_rev=skills.get("system_rev", ""), manifest=manifest, model=model)
+                          system_rev=skills.get("system_rev", "") + "|" + key_fp,
+                          manifest=manifest, model=model)
         home = Path(self.s.profiles_root) / name
         marker = home / HASH_MARKER
         if not marker.exists() or marker.read_text(encoding="utf-8") != h:

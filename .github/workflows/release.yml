@@ -51,12 +51,12 @@ jobs:
           svcs = {
             "kernel-harness": {"img": "kernel-harness.image.tar.gz", "tag": "kernel-harness/harness:" + v,
               "healthcheck": {"path": "/health", "expect": 200, "timeout_s": 90, "port": 8080},
-              "env": {"required": ["REDIS_URL", "HARNESS_SERVICE_TOKENS", "HARNESS_RUN_TOKEN_SECRET", "HARNESS_BROKER_TOKENS",
-                                   "BACKEND_URL", "BACKEND_INTERNAL_TOKEN", "HERMES_MASTER_SECRET", "HARNESS_WORKERS", "LITELLM_URL"]},
+              "env": {"required": ["HARNESS_SERVICE_TOKENS", "HARNESS_RUN_TOKEN_SECRET", "HARNESS_BROKER_TOKENS",
+                                   "BACKEND_INTERNAL_TOKEN", "HERMES_MASTER_SECRET"]},
               "resources": {"memory": "1g", "cpus": "1"}},
             "rt-hermes": {"img": "rt-hermes.image.tar.gz", "tag": "kernel-harness/rt-hermes:" + v,
               "healthcheck": {"path": "/health", "expect": 200, "timeout_s": 120, "port": 8642},
-              "env": {"required": ["RT_BROKER_URL", "RT_BROKER_TOKEN"]},
+              "env": {"required": ["RT_BROKER_TOKEN", "OPENAI_API_KEY"]},
               "resources": {"memory": "2g", "cpus": "2"}},
           }
           for name, c in svcs.items():

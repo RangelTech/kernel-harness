@@ -24,6 +24,10 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"object": "list", "data": [{"id": "fake-model", "object": "model", "context_length": 128000}]})
         self._send(200, {"ok": True})
     def do_POST(self):
+        need = os.environ.get("FAKE_REQUIRE_KEY")
+        if need and self.headers.get("Authorization", "") != "Bearer " + need:
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            return self._send(401, {"error": {"message": "LiteLLM Virtual Key expected. Received=" + self.headers.get("Authorization", "")[:20], "type": "auth_error"}})
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
         msgs = body.get("messages", [])
         if not msgs and not body.get("tools"):   # nao e chat: loga (ex.: backend firecrawl falso) e responde generico
