@@ -64,14 +64,21 @@ class HermesClient:
     def _base(self, profile: str) -> str:
         return f"{self.w.url}/p/{profile}"
 
-    def _headers(self, extra: dict | None = None) -> dict:
-        h = {"Authorization": f"Bearer {self.w.key}"} if self.w.key else {}
+    def _key(self, profile: str) -> str:
+        if self.s.hermes_master_secret:
+            from profiles.profile_config import derive_api_key
+            return derive_api_key(self.s.hermes_master_secret, profile)
+        return self.w.key
+
+    def _headers(self, profile: str, extra: dict | None = None) -> dict:
+        key = self._key(profile)
+        h = {"Authorization": f"Bearer {key}"} if key else {}
         h.update(extra or {})
         return h
 
     async def start_run(self, profile: str, body: dict, *, idempotency_key: str,
                         session_key: str | None) -> str:
-        headers = self._headers({"Idempotency-Key": idempotency_key})
+        headers = self._headers(profile, {"Idempotency-Key": idempotency_key})
         if session_key:
             headers["X-Hermes-Session-Key"] = session_key
         last = None
@@ -94,7 +101,7 @@ class HermesClient:
     async def stream_events(self, profile: str, hermes_run_id: str,
                             last_seq: int | None) -> AsyncIterator[HermesEvent]:
         """Uma conexao SSE. Termina quando o servidor fecha; o chamador decide reconectar."""
-        headers = self._headers({"Accept": "text/event-stream"})
+        headers = self._headers(profile, {"Accept": "text/event-stream"})
         if last_seq is not None:
             headers["Last-Event-ID"] = str(last_seq)
         url = f"{self._base(profile)}/v1/runs/{hermes_run_id}/events"
@@ -166,7 +173,7 @@ class HermesClient:
     async def stop(self, profile: str, hermes_run_id: str) -> None:
         try:
             await self.http.post(f"{self._base(profile)}/v1/runs/{hermes_run_id}/stop",
-                                 headers=self._headers(), timeout=5.0)
+                                 headers=self._headers(profile), timeout=5.0)
         except httpx.HTTPError as exc:
             log.warning("stop falhou: %s", type(exc).__name__)
 
@@ -177,13 +184,13 @@ class HermesClient:
             body["request_id"] = request_id
         try:
             await self.http.post(f"{self._base(profile)}/v1/runs/{hermes_run_id}/approval",
-                                 json=body, headers=self._headers(), timeout=5.0)
+                                 json=body, headers=self._headers(profile), timeout=5.0)
         except httpx.HTTPError as exc:
             log.warning("approval falhou: %s", type(exc).__name__)
 
     async def steer(self, profile: str, hermes_run_id: str, text: str) -> None:
         try:
             await self.http.post(f"{self._base(profile)}/v1/runs/{hermes_run_id}/steer",
-                                 json={"input": text}, headers=self._headers(), timeout=5.0)
+                                 json={"input": text}, headers=self._headers(profile), timeout=5.0)
         except httpx.HTTPError as exc:
             log.warning("steer falhou: %s", type(exc).__name__)

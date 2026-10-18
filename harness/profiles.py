@@ -45,6 +45,12 @@ def profile_name(tenant_id: str, template_id: str, user_id: str | None) -> str:
     return f"{_seg(tenant_id)}__{_seg(template_id)}__{_seg(user_id)}"
 
 
+def short_profile_name(tenant_id: str, template_id: str, user_id: str | None) -> str:
+    """Id curto do Hermes (<=64, [a-z0-9_-]): o mesmo que o gerador de perfis usa em disco."""
+    from profiles.profile_config import profile_id
+    return profile_id(tenant_id, template_id, user_id)
+
+
 def template_hash(*, version_id: str, package_sha: str, system_rev: str, manifest: dict,
                   model: dict) -> str:
     raw = json.dumps({"v": version_id, "p": package_sha, "s": system_rev, "m": manifest,
@@ -80,17 +86,31 @@ class StubProfileGenerator:
         return {"home": str(home), "config_hash": hashlib.sha256(cfg.encode()).hexdigest()}
 
 
-def load_generator() -> ProfileGenerator:
-    try:
-        mod = importlib.import_module("profiles.profile_config")
-    except ImportError:
-        return StubProfileGenerator()
+class RealProfileGenerator:
+    """Adaptador do gerador do WP-B (profiles.profile_config.write_profile)."""
 
-    class _Adapter:
-        def generate(self, **kwargs) -> dict:
-            return mod.generate(**kwargs)
+    def __init__(self, settings: Settings) -> None:
+        self.s = settings
 
-    return _Adapter()
+    def generate(self, *, tenant_id: str, template_id: str, user_id: str | None, manifest: dict,
+                 model: dict, template_hash: str = "", **_: object) -> dict:
+        from profiles import profile_config as pc
+        m = dict(manifest or {})
+        if model and model.get("alias") and not m.get("model_alias"):
+            m["model_alias"] = model["alias"]
+        paths = pc.Paths(system_skills=self.s.system_skills_dir,
+                         tenant_skills_root=self.s.tenant_skills_root,
+                         users_root=self.s.users_root, plugin_src=self.s.plugin_src,
+                         llm_base_url=f"{self.s.litellm_url}/v1")
+        r = pc.write_profile(self.s.profiles_root, tenant_id, template_id, user_id, m,
+                             self.s.hermes_master_secret, paths, template_version="current")
+        return {"home": r["path"], "config_hash": template_hash}
+
+
+def load_generator(settings: Settings | None = None) -> ProfileGenerator:
+    if settings is not None and settings.hermes_master_secret:
+        return RealProfileGenerator(settings)
+    return StubProfileGenerator()
 
 
 def safe_relpath(path: str) -> str | None:
@@ -115,7 +135,7 @@ class ProfileManager:
                  generator: ProfileGenerator | None = None):
         self.s = settings
         self.backend = backend
-        self.gen = generator or load_generator()
+        self.gen = generator or load_generator(settings)
 
     # ---- pacote do tenant (camada 2) -------------------------------------
     async def materialize_tenant_package(self, template_id: str, version_id: str,
@@ -205,7 +225,8 @@ class ProfileManager:
     async def ensure(self, *, tenant_id: str, template_id: str, user_id: str | None,
                      version_id: str, manifest: dict, model: dict, skills: dict
                      ) -> tuple[str, Path | None]:
-        name = profile_name(tenant_id, template_id, user_id)
+        name = (short_profile_name(tenant_id, template_id, user_id)
+                if self.s.hermes_master_secret else profile_name(tenant_id, template_id, user_id))
         pkg = skills.get("tenant_package")
         tenant_dir = await self.materialize_tenant_package(template_id, version_id, pkg)
         user_dir = None

@@ -100,6 +100,9 @@ class Settings:
     sweep_enabled: bool = True
     # --- dev
     insecure_dev: bool = False
+    # --- Hermes real: segredo mestre das chaves por perfil (vazio = modo legado/fake)
+    hermes_master_secret: str = ""
+    plugin_src: str = "/opt/rt/plugins/rt-broker"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -137,4 +140,6 @@ class Settings:
             pix_max_amount=_env("HARNESS_PIX_MAX_AMOUNT", "10000.00"),
             http_allowed_hosts_default=_csv("HARNESS_HTTP_ALLOWED_HOSTS"),
             insecure_dev=_bool("HARNESS_INSECURE_DEV", False),
+            hermes_master_secret=_env("HERMES_MASTER_SECRET"),
+            plugin_src=_env("RT_PLUGIN_SRC", cls.plugin_src),
         )
