@@ -430,9 +430,9 @@ async def test_b9_sql_write_guardrails_and_confirmation(rig):
         assert res["ok"] is False and res["error"]["code"] == "guardrail", stmt
     assert db_rows(rig, "select count(*) from pedidos") == [(1,)]
     assert db_rows(rig, "select saldo from clientes where id=1") == [(10.5,)]
-    # template sem tabelas liberadas nao escreve
+    # tabela fora da lista explicita nao escreve (lista vazia = qualquer tabela, padrao do produto)
     res = await last_result(rig, tool("rt_sql_write", {"datasource": "vendas", "statement": ins}),
-                            approve="approve", limits={"write_tables": []})
+                            approve="approve", limits={"write_tables": ["outra_tabela"]})
     assert res["error"]["code"] == "guardrail"
 
 
@@ -492,10 +492,10 @@ async def test_b10_rt_http_allowlist_ssrf_and_secret_resolution(rig):
         "method": "GET", "url": "https://api.partner.test/x",
         "headers": {"A": "{{secret:NAO_EXISTE}}"}}))
     assert res["error"]["code"] == "invalid_args"
-    # sem allowlist nenhuma chamada passa
+    # com lista explicita, host fora dela nao passa (sem lista = qualquer host publico)
     res = await last_result(rig, tool("rt_http", {"method": "GET",
                                                   "url": "https://api.partner.test/x"}),
-                            limits={"http_allowed_hosts": []})
+                            limits={"http_allowed_hosts": ["so-este.test"]})
     assert res["error"]["code"] == "forbidden_target"
     assert len(rig.ext.partner_calls) == 1  # so a primeira chegou ao parceiro
 
