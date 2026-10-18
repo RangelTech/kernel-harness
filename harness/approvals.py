@@ -19,6 +19,8 @@ from harness.store import Store
 
 log = logging.getLogger("harness.approvals")
 
+SCHEDULE_PREAPPROVED = frozenset({"email_send"})
+
 
 class ApprovalService:
     def __init__(self, settings: Settings, store: Store, backend: Backend, bus: EventBus,
@@ -33,6 +35,10 @@ class ApprovalService:
     async def request(self, ctx: RunContext, *, kind: str, summary: str, risk: str,
                       details: dict | None = None) -> str:
         """-> 'approved' | 'denied' | 'expired' | 'external_denied'."""
+        if ctx.channel == "schedule":
+            # rotina agendada: ninguem esta na tela. So o que o dono autorizou ao criar a rotina
+            # (envio de e-mail) segue; o resto (dinheiro, escrita, publicacao) e negado.
+            return "approved" if kind in SCHEDULE_PREAPPROVED else "external_denied"
         if (ctx.actor or {}).get("type") == "external" and \
                 ctx.limits.get("external_approval") != "human":
             return "external_denied"

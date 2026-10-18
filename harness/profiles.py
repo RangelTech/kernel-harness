@@ -24,6 +24,7 @@ import uuid
 from pathlib import Path
 from typing import Protocol
 
+from broker.catalog import expand_tools
 from harness.backend import Backend
 from harness.config import Settings
 
@@ -241,7 +242,8 @@ class ProfileManager:
             self.gen.generate(
                 profile_name=name, profiles_root=self.s.profiles_root, tenant_id=tenant_id,
                 template_id=template_id, user_id=user_id, template_version_id=version_id,
-                template_hash=h, manifest=manifest, model=model,
+                template_hash=h, manifest={**manifest, "tools": expand_tools(manifest.get("tools"))},
+                model=model,
                 skills_dirs={"system": self.s.system_skills_dir,
                              "tenant": str(Path(self.s.tenant_skills_root) / _seg(template_id)
                                            / "current") if tenant_dir else None,

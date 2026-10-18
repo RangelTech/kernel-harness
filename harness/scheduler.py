@@ -32,7 +32,7 @@ log = logging.getLogger("harness.scheduler")
 
 STREAM = "runs:queue"
 GROUP = "dispatch"
-PRIORITY = {"chatwoot": 0, "api": 0, "web": 1}  # menor = mais urgente
+PRIORITY = {"chatwoot": 0, "api": 0, "web": 1, "schedule": 2}  # menor = mais urgente
 
 
 def priority_for(channel: str) -> int:

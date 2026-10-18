@@ -130,3 +130,29 @@ def test_plugin_schemas_cover_every_broker_tool():
     missing = set(TOOLS) - set(PLUGIN)
     assert not missing, f"sem schema no plugin: {sorted(missing)}"
     json.dumps({k: v[1] for k, v in PLUGIN.items()})
+
+
+async def test_capability_group_in_manifest_allows_its_tools(rig):
+    res = await last_result(rig, tool("rt_env_expose", {"app": "grp", "port": 4000}),
+                            approve="approve", tools=["rt_env_manage"])
+    assert res["ok"], res
+    res = await last_result(rig, tool("rt_schedule_list", {}), tools=["rt_job_schedule"])
+    assert res["ok"], res
+
+
+def test_expand_tools_dedups_and_keeps_plain_names():
+    from broker.catalog import expand_tools
+    out = expand_tools(["rt_env_manage", "rt_env_expose", "rt_echo"])
+    assert out.count("rt_env_expose") == 1 and "rt_echo" in out and "rt_env_domain_add" in out
+
+
+async def test_scheduled_run_preapproves_email_but_denies_money_and_publish(rig):
+    ev = await rig.send(rig.body(message=tool("rt_email_send", {
+        "account": "Suporte", "to": ["a@b.com"], "subject": "Resumo", "body": "oi"}) + "[[echo]]",
+        channel="schedule"))
+    assert ev[-1].type == "done", [(e.type, e.data) for e in ev]
+    res = json.loads(ev[-1].data["text"])
+    assert res["ok"], res
+    res = await last_result(rig, tool("rt_env_expose", {"app": "x1", "port": 4000}),
+                            channel="schedule")
+    assert not res["ok"] and not [c for c in rig.ext.rm_calls if c["path"].endswith("/exposures")]

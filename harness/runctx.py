@@ -75,7 +75,9 @@ class RunContext:
     # ---- manifesto
     @property
     def tools_allowed(self) -> set[str]:
-        return set(self.manifest.get("tools") or [])
+        from broker.catalog import expand_tools
+
+        return set(expand_tools(self.manifest.get("tools")))
 
     @property
     def limits(self) -> dict:
