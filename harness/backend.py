@@ -44,6 +44,7 @@ class Backend(Protocol):
     async def search_docs(self, run_id: str, token: str, payload: dict) -> list[dict]: ...
     async def recall_memories(self, run_id: str, token: str, payload: dict) -> list[dict]: ...
     async def fetch_package(self, url: str) -> dict: ...
+    async def schedule_op(self, run_id: str, token: str, payload: dict) -> dict: ...
     async def aclose(self) -> None: ...
 
 
@@ -115,6 +116,9 @@ class HttpBackend:
         if r.status_code >= 400:
             raise BackendError(r.status_code, r.text)
         return r.json()
+
+    async def schedule_op(self, run_id, token, payload):
+        return await self._post(f"/internal/runs/{run_id}/schedules", token, payload)
 
     async def search_docs(self, run_id, token, payload):
         data = await self._post("/internal/search/docs", token, payload)

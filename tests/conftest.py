@@ -38,7 +38,10 @@ SENTINELS = [S_APIKEY, S_MP, S_MAIL, S_DB]
 
 ALL_TOOLS = ["rt_echo", "rt_data_describe", "rt_sql_read", "rt_sql_write", "rt_sql_transaction",
              "rt_pix_create", "rt_payment_status", "rt_mp_read", "rt_email_list",
-             "rt_email_send", "rt_http", "rt_search_docs", "rt_memory_recall", "rt_artifact_put"]
+             "rt_email_send", "rt_http", "rt_search_docs", "rt_memory_recall", "rt_artifact_put",
+             "rt_executor_run", "rt_env_status", "rt_env_start", "rt_env_stop", "rt_env_backup",
+             "rt_env_expose", "rt_env_unexpose", "rt_env_domain_add", "rt_env_domain_verify",
+             "rt_schedule_create", "rt_schedule_list", "rt_schedule_pause", "rt_schedule_delete"]
 
 
 @dataclass
@@ -261,7 +264,9 @@ async def make_rig(tmp_path):
             scheduler_tick_s=0.02, worker_health_interval_s=0.2, boot_retry_s=0.2,
             hermes_reconnect_attempts=2, hermes_reconnect_backoff_s=0.05,
             hermes_start_retries=2, chat_lock_ttl_ms=3000, approval_timeout_s=5.0,
-            silence_timeout_s=30.0, turn_timeout_s=60.0)
+            silence_timeout_s=30.0, turn_timeout_s=60.0,
+            runtime_manager_url="http://rm.fake", rm_service="kernel-harness",
+            rm_secret="rm-secret-test-0001", apps_base_domain="apps.test")
         kw.update(settings_kw)
         settings = Settings(**kw)
         db = tmp_path / "vendas.db"

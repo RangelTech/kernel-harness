@@ -111,6 +111,71 @@ TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
             ["name", "kind"],
         ),
     ),
+    "rt_executor_run": (
+        "Roda um script Python num ambiente isolado SEM internet (pandas, matplotlib, pypdf, reportlab). "
+        "Dados entram por `inputs` (nome do arquivo -> texto, lidos em /in/<nome>); arquivos gravados "
+        "em /out (png, csv, pdf, xlsx...) viram artefatos na conversa. Use para graficos, calculos e PDFs.",
+        _obj({"script": {**_S, "description": "Codigo Python completo"},
+              "inputs": {"type": "object", "description": "nome do arquivo -> conteudo texto"},
+              "timeout_s": _N}, ["script"]),
+    ),
+    "rt_env_status": ("Estado do ambiente da empresa, apps publicados e consumo.", _obj({})),
+    "rt_env_start": ("Inicia o ambiente da empresa (se estiver parado).", _obj({})),
+    "rt_env_stop": ("Para o ambiente da empresa (pede confirmacao).", _obj({})),
+    "rt_env_backup": ("Faz um backup do ambiente da empresa agora.", _obj({})),
+    "rt_env_expose": (
+        "Publica um servico do ambiente na internet (HTTPS, subdominio da empresa). Pede confirmacao.",
+        _obj({"app": {**_S, "description": "Nome curto do app (minusculas, numeros, hifen)"},
+              "port": {"type": "integer", "description": "Porta onde o servico escuta (1024-65535)"}},
+             ["app", "port"]),
+    ),
+    "rt_env_unexpose": ("Tira um app da internet (pede confirmacao).", _obj({"app": _S}, ["app"])),
+    "rt_env_domain_add": (
+        "Liga um dominio proprio do cliente a um app publicado; devolve os registros DNS (TXT e CNAME).",
+        _obj({"host": _S, "app": _S}, ["host", "app"]),
+    ),
+    "rt_env_domain_verify": ("Verifica o DNS de um dominio proprio ja adicionado.", _obj({"host": _S}, ["host"])),
+    "rt_schedule_create": (
+        "Cria uma rotina recorrente da plataforma: no horario, o agente e acordado com a instrucao salva. "
+        "cron de 5 campos (ex.: '0 8 * * *' = todo dia as 8h). Pede confirmacao.",
+        _obj({"name": _S, "cron": _S, "timezone": {**_S, "description": "Padrao America/Sao_Paulo"},
+              "instruction": {**_S, "description": "O que o agente deve fazer a cada disparo (texto completo)"}},
+             ["name", "cron", "instruction"]),
+    ),
+    "rt_schedule_list": ("Lista as rotinas agendadas.", _obj({})),
+    "rt_schedule_pause": ("Pausa (ou retoma com resume=true) uma rotina.", _obj({"id": _S, "resume": {"type": "boolean"}}, ["id"])),
+    "rt_schedule_delete": ("Apaga uma rotina agendada (pede confirmacao).", _obj({"id": _S}, ["id"])),
+    "rt_data_describe": (
+        "Lista tabelas e colunas de uma fonte de dados autorizada (use antes de consultar).",
+        _obj({"datasource": {**_S, "description": "Rotulo da fonte (opcional se houver uma so)"}}),
+    ),
+    "rt_mongo_find": (
+        "Consulta documentos de uma colecao MongoDB autorizada (somente leitura).",
+        _obj({"datasource": _S, "collection": _S, "filter": {"type": ["object", "string"]},
+              "projection": {"type": ["object", "string", "null"]}, "limit": {"type": "integer"},
+              "title": _S}, ["collection"]),
+    ),
+    "rt_sql_write": (
+        "Executa UMA instrucao de escrita (INSERT/UPDATE/DELETE) em tabela permitida. Pede confirmacao.",
+        _obj({"datasource": _S, "statement": _S}, ["statement"]),
+    ),
+    "rt_sql_transaction": (
+        "Executa varias instrucoes de escrita numa transacao so. Pede confirmacao.",
+        _obj({"datasource": _S, "statements": {"type": "array", "items": _S}}, ["statements"]),
+    ),
+    "rt_mp_read": (
+        "Busca pagamentos no Mercado Pago (somente leitura): filtre por referencia ou status.",
+        _obj({"reference": _S, "status": _S, "limit": {"type": "integer"}}),
+    ),
+    "rt_email_list": (
+        "Lista e-mails recentes da caixa de entrada de uma conta da empresa.",
+        _obj({"account": {**_S, "description": "Rotulo da conta"}, "folder": _S,
+              "limit": {"type": "integer"}}),
+    ),
+    "rt_memory_recall": (
+        "Recupera memorias/preferencias que o usuario ja informou, relevantes a uma consulta.",
+        _obj({"query": _S}, ["query"]),
+    ),
     "rt_env_exec": (
         "Executa um comando no ambiente persistente da empresa (quando contratado).",
         _obj({"command": _S, "timeout_s": _N, "cwd": _S}, ["command"]),

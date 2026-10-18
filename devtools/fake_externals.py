@@ -23,6 +23,9 @@ class FakeExternals:
         self.uploads: dict[str, bytes] = {}
         self.mp_fail = False
         self.partner_calls: list[dict] = []
+        self.rm_calls: list[dict] = []
+        self.exposures: dict[str, list[dict]] = {}
+        self.rm_script_exit = 0
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle))
@@ -35,6 +38,8 @@ class FakeExternals:
         host, path = req.url.host, req.url.path
         if host == "api.mercadopago.com":
             return self._mp(req, path)
+        if host == "rm.fake":
+            return self._rm(req, path)
         if host == "storage.fake" and req.method == "PUT":
             self.uploads[path.rsplit("/", 1)[-1]] = req.content
             return httpx.Response(200)
@@ -45,6 +50,47 @@ class FakeExternals:
             return httpx.Response(200, json={"echo_auth": req.headers.get("authorization"),
                                              "path": path})
         return httpx.Response(404, json={"error": "unknown host " + str(host)})
+
+    def _rm(self, req: httpx.Request, path: str) -> httpx.Response:
+        h = {k.lower(): v for k, v in req.headers.items()}
+        body = json.loads(req.content) if req.content else {}
+        self.rm_calls.append({"method": req.method, "path": path, "scope": h.get("x-rm-scope"),
+                              "service": h.get("x-rm-service"), "sig": bool(h.get("x-rm-signature")),
+                              "body": body})
+        m = re.fullmatch(r"/v1/tenants/([^/]+)(?:/(.*))?", path)
+        if path == "/v1/executor/runs":
+            out = {}
+            if "savefig" in body.get("script", ""):
+                out["grafico.png"] = TINY_PNG
+            return httpx.Response(200, json={"run_id": "x1", "exit_code": self.rm_script_exit,
+                                             "stdout": "ok", "stderr": "", "outputs": out})
+        if not m:
+            return httpx.Response(404, json={"error": "not_found"})
+        t, rest = m.group(1), m.group(2) or ""
+        if req.method == "GET" and not rest:
+            return httpx.Response(200, json={"workspace_enabled": True, "state": "running",
+                                             "exposures": self.exposures.get(t, [])})
+        if rest == "workspace:start":
+            return httpx.Response(200, json={"workspace_enabled": True, "state": "running",
+                                             "exposures": self.exposures.get(t, [])})
+        if rest == "exposures" and req.method == "POST":
+            if not 1024 <= int(body.get("port", 0)) <= 65535:
+                return httpx.Response(400, json={"error": "invalid_port"})
+            self.exposures.setdefault(t, []).append({"app": body["app"], "port": body["port"]})
+            return httpx.Response(200, json={"state": "running"})
+        if rest.startswith("exposures/") and req.method == "DELETE":
+            app = rest.split("/", 1)[1]
+            self.exposures[t] = [e for e in self.exposures.get(t, []) if e["app"] != app]
+            return httpx.Response(200, json={"state": "running"})
+        if rest == "domains":
+            return httpx.Response(200, json={"host": body["host"], "txt_name": "_rt." + body["host"],
+                                             "txt_value": "tok123",
+                                             "cname_target": body["app"] + "-" + t + ".apps.test"})
+        if rest.startswith("domains/") and rest.endswith("/verify"):
+            return httpx.Response(200, json={"active": False, "reason": "txt_missing"})
+        if rest == "backup":
+            return httpx.Response(200, json={"backup_id": "bk1"})
+        return httpx.Response(404, json={"error": "not_found"})
 
     def _mp(self, req: httpx.Request, path: str) -> httpx.Response:
         if req.headers.get("authorization", "").split(" ")[-1] == "":

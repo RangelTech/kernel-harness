@@ -55,6 +55,9 @@ class Settings:
     litellm_url: str = "http://llm-gw:4000"
     litellm_key: str = ""
     runtime_manager_url: str = ""
+    rm_service: str = "kernel-harness"
+    rm_secret: str = ""
+    apps_base_domain: str = "apps.rangeltech.net"
     mercado_pago_api: str = "https://api.mercadopago.com"
     google_calendar_base: str = "https://www.googleapis.com/calendar/v3"
     google_sheets_base: str = "https://sheets.googleapis.com/v4"
@@ -122,6 +125,9 @@ class Settings:
             litellm_url=_env("LITELLM_URL", cls.litellm_url),
             litellm_key=_env("LITELLM_KEY"),
             runtime_manager_url=_env("RUNTIME_MANAGER_URL"),
+            rm_service=_env("RM_SERVICE", "kernel-harness"),
+            rm_secret=_env("RM_SECRET"),
+            apps_base_domain=_env("APPS_BASE_DOMAIN", cls.apps_base_domain),
             mercado_pago_api=_env("MERCADO_PAGO_API", cls.mercado_pago_api),
             profiles_root=_env("PROFILES_ROOT", cls.profiles_root),
             users_root=_env("USERS_ROOT", cls.users_root),

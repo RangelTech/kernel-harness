@@ -67,6 +67,24 @@ class FakeBackend:
     async def lookup_charge(self, run_id, token, reference_id):
         return self.charges.get(reference_id)
 
+    async def schedule_op(self, run_id, token, payload):
+        op = payload.get("op")
+        jobs = self.__dict__.setdefault("schedules", {})
+        if op == "create":
+            sid = f"sch-{len(jobs) + 1}"
+            jobs[sid] = {"id": sid, **{k: v for k, v in payload.items() if k != "op"},
+                         "status": "active"}
+            return jobs[sid]
+        if op == "list":
+            return {"schedules": list(jobs.values())}
+        sid = payload.get("id")
+        if sid not in jobs:
+            return {"error": "not_found"}
+        if op == "delete":
+            return {"deleted": jobs.pop(sid)["id"]}
+        jobs[sid]["status"] = "paused" if op == "pause" else "active"
+        return jobs[sid]
+
     async def search_docs(self, run_id, token, payload):
         q = payload["query"].lower()
         return [d for d in self.docs if d.get("tenant_id") == payload["tenant_id"]
@@ -114,6 +132,10 @@ def build_http_app(state: FakeBackend | None = None) -> FastAPI:
     async def seed_user_skills(tenant_id: str, user_id: str, request: Request):
         st.user_skills[(tenant_id, user_id)] = (await request.json()).get("skills", [])
         return {"ok": True}
+
+    @app.post("/internal/runs/{run_id}/schedules")
+    async def schedules(run_id: str, request: Request):
+        return await st.schedule_op(run_id, "", await request.json())
 
     @app.post("/internal/approvals")
     async def approvals(request: Request):

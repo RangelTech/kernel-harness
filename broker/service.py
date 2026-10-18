@@ -15,6 +15,9 @@ import httpx
 
 from broker import data, http_tool, misc, pix
 from broker import email_tool as email_mod
+from broker import env as env_mod
+from broker import executor as executor_mod
+from broker import schedule as schedule_mod
 from broker.errors import ToolError
 from harness.approvals import ApprovalService
 from harness.backend import Backend
@@ -50,6 +53,19 @@ TOOLS: dict[str, ToolSpec] = {
     "rt_search_docs": ToolSpec(misc.search_docs),
     "rt_memory_recall": ToolSpec(misc.memory_recall),
     "rt_artifact_put": ToolSpec(misc.artifact_put),
+    "rt_executor_run": ToolSpec(executor_mod.run),
+    "rt_env_status": ToolSpec(env_mod.status),
+    "rt_env_start": ToolSpec(env_mod.start),
+    "rt_env_stop": ToolSpec(env_mod.stop),
+    "rt_env_backup": ToolSpec(env_mod.backup),
+    "rt_env_expose": ToolSpec(env_mod.expose),
+    "rt_env_unexpose": ToolSpec(env_mod.unexpose),
+    "rt_env_domain_add": ToolSpec(env_mod.domain_add),
+    "rt_env_domain_verify": ToolSpec(env_mod.domain_verify),
+    "rt_schedule_create": ToolSpec(schedule_mod.create),
+    "rt_schedule_list": ToolSpec(schedule_mod.list_),
+    "rt_schedule_pause": ToolSpec(schedule_mod.pause),
+    "rt_schedule_delete": ToolSpec(schedule_mod.delete),
 }
 
 
