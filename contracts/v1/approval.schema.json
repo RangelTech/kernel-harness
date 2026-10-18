@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rangeltech.net/contracts/kernel-harness/v1/approval.schema.json",
+  "title": "POST /v1/approvals/{id} (decisao autenticada repassada pelo backend)",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["decision"],
+      "properties": {
+        "decision": {"enum": ["approve", "deny"]},
+        "tenant_id": {"type": "string"},
+        "user_id": {"type": "string"}
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {"status": {"enum": ["approved", "denied", "expired", "already_decided"]}}
+    },
+    "internal_create_request": {
+      "type": "object",
+      "required": ["run_id", "tenant_id", "chat_id", "summary", "risk", "kind", "expires_at"],
+      "properties": {
+        "run_id": {"type": "string"}, "tenant_id": {"type": "string"},
+        "user_id": {"type": ["string", "null"]}, "chat_id": {"type": "string"},
+        "summary": {"type": "string"}, "risk": {"enum": ["low", "medium", "high"]},
+        "kind": {"type": "string"}, "details": {"type": "object"}, "expires_at": {"type": "string"}
+      }
+    },
+    "internal_create_response": {
+      "type": "object", "required": ["approval_id"],
+      "properties": {"approval_id": {"type": "string"}}
+    }
+  }
+}

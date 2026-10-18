@@ -1,0 +1,93 @@
+{
+ "A_run_status": "completed",
+ "A_tools_oferecidas_ao_modelo": [
+  "memory",
+  "rt_echo",
+  "rt_sql_read",
+  "session_search",
+  "skill_manage",
+  "skill_view",
+  "skills_list",
+  "todo_list"
+ ],
+ "A_eventos": [
+  [
+   "tool.started",
+   "rt_echo",
+   "oi-broker"
+  ],
+  [
+   "tool.completed",
+   "rt_echo",
+   "{\"ok\": true, \"echo\": \"oi-broker\", \"session_id\": \"sess-A1\"}"
+  ],
+  [
+   "tool.started",
+   "rt_sql_read",
+   "select 1"
+  ],
+  [
+   "tool.completed",
+   "rt_sql_read",
+   "{\"ok\": true, \"tool\": \"rt_sql_read\", \"session_id\": \"sess-A1\", \"args\": {\"datasource\": \"db1\", \"query\": \"select 1\"}}"
+  ],
+  [
+   "message.delta",
+   null,
+   ""
+  ],
+  [
+   "reasoning.available",
+   null,
+   ""
+  ],
+  [
+   "run.completed",
+   null,
+   ""
+  ]
+ ],
+ "A_saida_final": "N_MSGS=5|USERS=CALL:rt_echo:{\"text\": \"oi-broker\"}\nCALL:rt_sql_read:{\"datasource\":\"db1\",\"query\":\"select 1\"}|TOOLRESULTS={\"ok\": true, \"echo\": \"oi-broker\", \"session_id\": \"sess-A1\"} || {\"ok\": true, \"tool\": \"rt_sql_read\", \"session_id\": \"sess-A1\", \"args\": {\"datasource\": \"db1\", \"query\": \"select 1\"}}",
+ "A_broker_log": [],
+ "B_fora_do_manifesto": {
+  "status": "completed",
+  "saida": "N_MSGS=4|USERS=CALL:rt_pix_create:{\"amount\":\"1.00\",\"reference\":\"x\"}|TOOLRESULTS=Tool 'rt_pix_create' does not exist. Available tools: memory, rt_echo, rt_sql_read, session_search, skill_manage, skill_view, skills_list, todo_list",
+  "broker_chamado": 0
+ },
+ "C_sem_tools": {
+  "status": "completed",
+  "tools_oferecidas": [
+   "memory",
+   "session_search",
+   "skill_manage",
+   "skill_view",
+   "skills_list",
+   "todo_list"
+  ],
+  "saida": "N_MSGS=4|USERS=CALL:rt_echo:{\"text\": \"nao deveria\"}|TOOLRESULTS=Tool 'rt_echo' does not exist. Available tools: memory, session_search, skill_manage, skill_view, skills_list, todo_list",
+  "broker_chamado": 0
+ },
+ "D_toolset_removido": {
+  "status": "completed",
+  "tools_oferecidas": [
+   "memory",
+   "rt_echo",
+   "rt_sql_read",
+   "session_search",
+   "skill_manage",
+   "skill_view",
+   "skills_list",
+   "todo_list"
+  ],
+  "saida": "N_MSGS=4|USERS=CALL:rt_echo:{\"text\": \"toolset removido\"}|TOOLRESULTS={\"ok\": true, \"echo\": \"toolset removido\", \"session_id\": \"sess-A3\"}",
+  "broker_chamado": 0
+ },
+ "E_broker_403": {
+  "status": "completed",
+  "saida": "N_MSGS=4|USERS=CALL:rt_echo:{\"text\": \"sessao negada\"}|TOOLRESULTS={\"error\": \"broker_http_403\", \"broker\": {\"error\": \"session_not_active\"}}"
+ },
+ "F_broker_fora": {
+  "status": "completed",
+  "saida": "N_MSGS=4|USERS=CALL:rt_echo:{\"text\": \"broker off\"}|TOOLRESULTS={\"error\": \"broker_unreachable\", \"detail\": \"URLError\"}"
+ }
+}

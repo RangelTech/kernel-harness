@@ -1,0 +1,94 @@
+# SOMENTE desenvolvimento/teste offline (spec 04, 14.1). Producao: stacks/ do repo vps_rt_infra.
+# Redis (AOF, noeviction) + kernel-harness + 2 Hermes FALSOS + backend FALSO.
+# Subir:   docker compose -f dev/compose.harness.yml up --build
+# Fumaca:  python dev/smoke.py   (envia uma run e le o SSE)
+name: harness-dev
+
+x-fake: &fake
+  build:
+    context: ..
+    dockerfile: docker/harness.Dockerfile
+    target: dev
+  volumes:
+    - profiles:/srv/hermes/profiles
+    - users:/srv/hermes/users
+    - tenant_skills:/skills/tenant
+    - system_skills:/skills/system
+
+services:
+  # volumes nomeados nascem como root; o kernel e o Hermes rodam como uid 10001
+  init-volumes:
+    <<: *fake
+    user: "0"
+    command: ["sh", "-c", "chown -R 10001:10001 /srv/hermes /skills"]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes: ["redis:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 10
+
+  backend:
+    <<: *fake
+    command: ["python", "-m", "devtools.run_fake_backend"]
+    environment: {PORT: "8090"}
+    ports: ["8090:8090"]
+
+  hermes-w1:
+    <<: *fake
+    depends_on:
+      init-volumes: {condition: service_completed_successfully}
+    command: ["python", "-m", "devtools.run_fake_hermes"]
+    environment:
+      PORT: "8642"
+      HERMES_API_KEY: dev-hermes-key
+      RT_BROKER_URL: http://harness:8080/broker/v1/call
+      RT_BROKER_TOKEN: dev-broker-token
+      HERMES_MAX_CONCURRENT_RUNS: "4"
+
+  hermes-w2:
+    <<: *fake
+    depends_on:
+      init-volumes: {condition: service_completed_successfully}
+    command: ["python", "-m", "devtools.run_fake_hermes"]
+    environment:
+      PORT: "8642"
+      HERMES_API_KEY: dev-hermes-key
+      RT_BROKER_URL: http://harness:8080/broker/v1/call
+      RT_BROKER_TOKEN: dev-broker-token
+      HERMES_MAX_CONCURRENT_RUNS: "4"
+
+  harness:
+    build:
+      context: ..
+      dockerfile: docker/harness.Dockerfile
+      target: prod
+    depends_on:
+      redis: {condition: service_healthy}
+      init-volumes: {condition: service_completed_successfully}
+    ports: ["8080:8080"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      HARNESS_SERVICE_TOKENS: dev-service-token
+      HARNESS_RUN_TOKEN_SECRET: dev-run-token-secret
+      HARNESS_BROKER_TOKENS: dev-broker-token
+      BACKEND_URL: http://backend:8090
+      BACKEND_INTERNAL_TOKEN: dev-internal-token
+      HARNESS_WORKERS: >-
+        [{"id":"w1","url":"http://hermes-w1:8642","key":"dev-hermes-key","slots":4},
+         {"id":"w2","url":"http://hermes-w2:8642","key":"dev-hermes-key","slots":4}]
+      PROFILES_ROOT: /srv/hermes/profiles
+      USERS_ROOT: /srv/hermes/users
+      TENANT_SKILLS_ROOT: /skills/tenant
+      SYSTEM_SKILLS_DIR: /skills/system
+      HARNESS_TENANT_CONCURRENCY: "2"
+    volumes:
+      - profiles:/srv/hermes/profiles
+      - users:/srv/hermes/users
+      - tenant_skills:/skills/tenant
+      - system_skills:/skills/system
+
+volumes: {redis: {}, profiles: {}, users: {}, tenant_skills: {}, system_skills: {}}

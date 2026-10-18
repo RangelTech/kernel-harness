@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rangeltech.net/contracts/kernel-harness/v1/broker_call.schema.json",
+  "title": "POST /broker/v1/call (plugin rt-broker -> kernel)",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["session_id", "tool", "args"],
+      "properties": {
+        "session_id": {"type": "string", "minLength": 3},
+        "tool": {"type": "string", "pattern": "^rt_[a-z0-9_]+$"},
+        "args": {"type": "object"}
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": {"type": "boolean"},
+        "result": {},
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": {"enum": ["guardrail", "approval_denied", "approval_expired", "tool_error",
+                              "limit", "invalid_args", "unavailable", "forbidden_target"]},
+            "message": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

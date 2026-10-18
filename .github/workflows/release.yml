@@ -23,55 +23,53 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
       - name: Gate (mesma imagem)
         run: bash scripts/verify.sh
-      - name: Build da imagem (mesmo Dockerfile do gate)
+      - name: Build das imagens (mesmos Dockerfiles do gate)
         run: |
           V="${{ steps.v.outputs.version }}"
           docker build -f docker/harness.Dockerfile --build-arg GIT_COMMIT="${GITHUB_SHA}" -t "kernel-harness/harness:${V}" .
-          docker save "kernel-harness/harness:${V}" | gzip -9 > image.tar.gz
-          echo "IMAGE_ID=sha256:$(gunzip -c image.tar.gz | tar -xO manifest.json | python3 -c "import sys,json,re;print(re.sub(r'^.*/','',json.load(sys.stdin)[0]['Config']).replace('.json',''))")" >> "$GITHUB_ENV"
-          echo "ARCHIVE_SHA=$(sha256sum image.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
-          ls -l image.tar.gz
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push opcional ao GHCR (futuro; o artefato oficial e o asset da release)
-        continue-on-error: true
-        run: |
-          V="${{ steps.v.outputs.version }}"
-          docker tag "kernel-harness/harness:${V}" "ghcr.io/rangeltech/kernel-harness/harness:${V}"
-          docker push "ghcr.io/rangeltech/kernel-harness/harness:${V}"
-      - name: Manifesto
+          docker build -f docker/hermes.Dockerfile -t "kernel-harness/rt-hermes:${V}" .
+          docker save "kernel-harness/harness:${V}" | gzip -9 > kernel-harness.image.tar.gz
+          docker save "kernel-harness/rt-hermes:${V}" | gzip -9 > rt-hermes.image.tar.gz
+          ls -l *.image.tar.gz
+      - name: Manifestos (um por servico)
         run: |
           python3 - <<'PY'
-          import json, os, datetime
+          import json, os, hashlib, subprocess, datetime, re, tarfile
           v = "${{ steps.v.outputs.version }}"
-          m = {
-            "schema": 1,
-            "service": "kernel-harness",
-            "repo": "RangelTech/kernel-harness",
-            "commit": os.environ["GITHUB_SHA"][:7],
-            "version": v,
-            "artifact": {
-              "type": "docker-archive",
-              "asset": "image.tar.gz",
-              "sha256": os.environ["ARCHIVE_SHA"],
-              "image_id": os.environ["IMAGE_ID"],
-              "tag": "kernel-harness/harness:" + v
-            },
-            "built_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "contracts": {"api": "0.1.0"},
-            "healthcheck": {"path": "/health", "expect": 200, "timeout_s": 60, "port": 8080},
-            "env": {"required": []},
-            "resources": {"memory": "512m", "cpus": "0.5"}
+          def image_id(path):
+              with tarfile.open(path, "r:gz") as t:
+                  m = json.load(t.extractfile("manifest.json"))
+              return "sha256:" + re.sub(r"^.*/", "", m[0]["Config"]).replace(".json", "")
+          def sha(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as f:
+                  for c in iter(lambda: f.read(1 << 20), b""):
+                      h.update(c)
+              return h.hexdigest()
+          common = {"schema": 1, "repo": "RangelTech/kernel-harness", "commit": os.environ["GITHUB_SHA"][:7], "version": v,
+                    "built_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+          svcs = {
+            "kernel-harness": {"img": "kernel-harness.image.tar.gz", "tag": "kernel-harness/harness:" + v,
+              "healthcheck": {"path": "/health", "expect": 200, "timeout_s": 90, "port": 8080},
+              "env": {"required": ["REDIS_URL", "HARNESS_SERVICE_TOKENS", "HARNESS_RUN_TOKEN_SECRET", "HARNESS_BROKER_TOKENS",
+                                   "BACKEND_URL", "BACKEND_INTERNAL_TOKEN", "HERMES_MASTER_SECRET", "HARNESS_WORKERS", "LITELLM_URL"]},
+              "resources": {"memory": "1g", "cpus": "1"}},
+            "rt-hermes": {"img": "rt-hermes.image.tar.gz", "tag": "kernel-harness/rt-hermes:" + v,
+              "healthcheck": {"path": "/health", "expect": 200, "timeout_s": 120, "port": 8642},
+              "env": {"required": ["RT_BROKER_URL", "RT_BROKER_TOKEN"]},
+              "resources": {"memory": "2g", "cpus": "2"}},
           }
-          json.dump(m, open("release-manifest.json", "w"), indent=2)
+          for name, c in svcs.items():
+              m = dict(common, service=name)
+              m["artifact"] = {"type": "docker-archive", "asset": c["img"], "sha256": sha(c["img"]),
+                               "image_id": image_id(c["img"]), "tag": c["tag"]}
+              m["healthcheck"] = c["healthcheck"]; m["env"] = c["env"]; m["resources"] = c["resources"]
+              json.dump(m, open(f"release-manifest.{name}.json", "w"), indent=2)
+              print(name, m["artifact"]["image_id"])
           PY
-          cat release-manifest.json
       - name: GitHub Release com manifesto e imagem
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.v.outputs.version }}"
-          gh release create "$V" release-manifest.json image.tar.gz --title "$V" --notes "Artefato docker-archive (sha256 no manifesto). Deploy: somente vps_rt_infra." --target "${GITHUB_SHA}" || gh release upload "$V" release-manifest.json image.tar.gz --clobber
+          gh release create "$V" release-manifest.*.json *.image.tar.gz --title "$V" --notes "Artefato docker-archive (sha256 no manifesto). Deploy: somente vps_rt_infra." --target "${GITHUB_SHA}" || gh release upload "$V" release-manifest.*.json *.image.tar.gz --clobber

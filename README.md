@@ -1,8 +1,8 @@
 # kernel-harness
 
-Kernel de IA do RAgent: roda o **Hermes Agent** (NousResearch, projeto externo) num runtime isolado por tenant e expõe ao backend (`agent-platform`) uma API interna com eventos SSE e estados terminais. **Substitui o `kernel-llm`** (LangGraph com supervisor + especialistas).
+Kernel de IA do RAgent: roda o **Hermes Agent** (NousResearch, projeto externo) num runtime isolado por tenant e expõe ao backend (`agent-platform`) uma API interna com eventos SSE e estados terminais. **Convive com o `kernel-llm`** (LangGraph): o backend escolhe o kernel pelo tipo do template (spec 04, D-50).
 
-> Estado: **scaffold** (spec 01 do plano de reorganização). O comportamento funcional entra na spec 04.
+> Estado: **núcleo implementado** (spec 04, WP-E): API FastAPI, fila Redis Streams + dispatchers, tradução de eventos, broker `rt_*`, promotor de skills, `/compress`, recuperação de runs. Testes offline com Hermes falso. Relatório do pacote: `specs/anexos/04/exec/WP-E_kernel.md` (repo de specs).
 
 ## O que este repo é (e não é)
 | É | Não é |
@@ -14,7 +14,10 @@ Kernel de IA do RAgent: roda o **Hermes Agent** (NousResearch, projeto externo) 
 harness/    serviço do kernel (API interna, adaptador Hermes)         -> imagem ghcr.io/rangeltech/kernel-harness/harness
 runtime/    gerenciador de runtimes por tenant (Hermes por tenant)    (spec 04)
 executor/   ferramentas/jobs isolados                                 (spec 04)
-broker/     credenciais: valida tenant/template/ator a cada uso       (spec 04/06)
+broker/     ferramentas rt_*: credenciais so em memoria da run, SQL/Pix/e-mail/HTTP guardados
+devtools/   Hermes FALSO, backend FALSO e externos falsos (so teste/dev; alvo `dev` do Dockerfile)
+dev/        compose.harness.yml (Redis + kernel + 2 Hermes falsos + backend falso) e smoke.py
+tests/      pytest offline: C (contrato), B (broker), P (fila/pool), S (skills)
 contracts/  contrato Backend->Kernel e eventos (versionados)
 skills/     skills oficiais de sistema (SKILL.md)
 docker/     Dockerfiles
@@ -30,8 +33,11 @@ docs/       adr/, runbooks/, qa/, provenance.md
 
 ## Desenvolvimento local
 ```bash
+pip install -r requirements-dev.txt
+python -m pytest -q          # suites C, B, P, S, 100% offline (fakeredis + Hermes falso)
 scripts/verify.sh            # build + smoke (precisa de Docker)
-docker compose -f compose.dev.yml up --build
+docker compose -f dev/compose.harness.yml up --build   # pilha completa com fakes
+python dev/smoke.py "ola"    # envia uma run e imprime o SSE
 curl localhost:8080/health
 ```
 

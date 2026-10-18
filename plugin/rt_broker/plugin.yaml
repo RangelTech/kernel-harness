@@ -1,0 +1,14 @@
+name: rt-broker
+version: "0.1.0"
+description: "Ferramentas de plataforma (toolset rt_platform): stubs HTTP finos que repassam a chamada ao broker do kernel-harness. Nenhum segredo de terceiro passa por aqui."
+author: "RangelTech"
+provides_tools:
+  - rt_echo
+  - rt_sql_read
+  - rt_pix_create
+  - rt_payment_status
+  - rt_email_send
+  - rt_http
+  - rt_search_docs
+  - rt_artifact_put
+  - rt_env_exec
