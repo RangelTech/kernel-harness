@@ -39,7 +39,7 @@ SENTINELS = [S_APIKEY, S_MP, S_MAIL, S_DB]
 ALL_TOOLS = ["rt_echo", "rt_data_describe", "rt_sql_read", "rt_sql_write", "rt_sql_transaction",
              "rt_pix_create", "rt_payment_status", "rt_mp_read", "rt_email_list",
              "rt_email_send", "rt_http", "rt_search_docs", "rt_memory_recall", "rt_artifact_put",
-             "rt_executor_run", "rt_env_status", "rt_env_start", "rt_env_stop", "rt_env_backup",
+             "rt_executor_run", "rt_env_status", "rt_env_start", "rt_env_exec", "rt_env_stop", "rt_env_backup",
              "rt_env_expose", "rt_env_unexpose", "rt_env_domain_add", "rt_env_domain_verify",
              "rt_schedule_create", "rt_schedule_list", "rt_schedule_pause", "rt_schedule_delete"]
 
