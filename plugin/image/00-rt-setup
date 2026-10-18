@@ -1,0 +1,18 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+# rt-hermes: roda como root ANTES do 01-hermes-setup (que semeia skills embutidas e o .env).
+# 1) marcador .no-bundled-skills no HERMES_HOME (so a skill essencial 'hermes-agent' e semeada);
+# 2) .env do perfil default = SO a API_SERVER_KEY. Com >=2 perfis o gateway multiplexa e IGNORA o env
+#    do container: a chave do default precisa estar no .env do HERMES_HOME (medido na POC H7);
+# 3) config base do perfil default, se ainda nao existir.
+set -eu
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+mkdir -p "$HERMES_HOME"
+[ -e "$HERMES_HOME/.no-bundled-skills" ] || : > "$HERMES_HOME/.no-bundled-skills"
+if [ -n "${API_SERVER_KEY:-}" ] && ! grep -qx "API_SERVER_KEY=${API_SERVER_KEY}" "$HERMES_HOME/.env" 2>/dev/null; then
+    ( umask 077; printf 'API_SERVER_KEY=%s\n' "$API_SERVER_KEY" > "$HERMES_HOME/.env" )
+    chown hermes:hermes "$HERMES_HOME/.env" 2>/dev/null || true
+fi
+if [ ! -e "$HERMES_HOME/config.yaml" ] && [ -f /opt/rt/config.base.yaml ]; then
+    cp /opt/rt/config.base.yaml "$HERMES_HOME/config.yaml"
+fi

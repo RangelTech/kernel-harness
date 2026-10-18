@@ -1,0 +1,48 @@
+# Parte ESTATICA do config.yaml de um perfil de trabalho (spec 04 5.5).
+# O gerador (profile_config.py) acrescenta o que depende de (tenant, template, usuario, manifesto):
+# model.default/base_url, auxiliary.*.model, platform_toolsets, agent.max_turns/disabled_toolsets,
+# terminal, skills.external_dirs, plugins.*. Valores medidos na POC H2-H7 (ver H2_H7_RESULTADO.md).
+model:
+  provider: custom
+  context_length: 200000        # >= 64k (minimo do Hermes)
+auxiliary:
+  compression:
+    provider: custom
+  title_generation:
+    enabled: false              # evita 1 chamada de modelo por sessao nova
+  background_review:
+    enabled: false
+tools:
+  tool_search:
+    enabled: "off"                # plugin tools sao DIFERIDAS por padrao (tool_search/tool_describe/tool_call)
+skills:
+  project_discovery: false
+  write_approval: true          # nada e gravado: cada escrita vira JSON em pending/skills/
+  guard_agent_created: true
+  inline_shell: false
+  creation_nudge_interval: 0
+memory:
+  write_approval: true
+  nudge_interval: 0
+curator:
+  enabled: false
+approvals:
+  mode: manual
+  timeout: 120
+  deny:
+    - "rm -rf*"
+    - "curl *|*sh*"
+    - "wget *|*sh*"
+    - "*/opt/data/*"
+    - "*/srv/hermes/*"
+    - "*/skills/system*"
+    - "*/proc/*"
+compression:
+  enabled: true
+  threshold: 0.60
+security:
+  redact_secrets: true
+  allow_lazy_installs: false
+  allow_private_urls: false
+sessions:
+  auto_prune: false
