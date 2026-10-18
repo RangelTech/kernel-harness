@@ -10,6 +10,7 @@ ARG HERMES_DIGEST
 # O gerador de perfis cria o symlink  <perfil>/plugins/rt-broker -> /opt/rt/plugins/rt-broker
 # e liga o plugin em plugins.enabled (o Hermes carrega plugins por perfil e so os habilitados).
 COPY plugin/rt_broker /opt/rt/plugins/rt-broker
+COPY skills/system /skills/system
 COPY plugin/image/config.base.yaml /opt/rt/config.base.yaml
 COPY --chmod=0755 plugin/image/00-rt-setup /etc/cont-init.d/00-rt-setup
 

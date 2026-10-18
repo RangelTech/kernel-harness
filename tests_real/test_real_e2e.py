@@ -156,3 +156,10 @@ def test_p2_worker_killed_midrun_is_not_reported_as_done():
             pass
         time.sleep(5)
     assert final(last)[0] == "done", final(last)
+
+
+def test_s0_system_skills_present_in_every_profile():
+    for tenant in ("ta", "tb"):
+        out = text_of(run(tenant=tenant, message='x\nCALL:skills_list|{}'))
+        for sk in ("pix-mercadopago", "sql-analista", "boas-praticas-de-confirmacao"):
+            assert sk in out, (tenant, sk)

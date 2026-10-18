@@ -98,7 +98,7 @@ class RealProfileGenerator:
         m = dict(manifest or {})
         if model and model.get("alias") and not m.get("model_alias"):
             m["model_alias"] = model["alias"]
-        paths = pc.Paths(system_skills=self.s.system_skills_dir,
+        paths = pc.Paths(system_skills=self.s.worker_system_skills_dir,
                          tenant_skills_root=self.s.tenant_skills_root,
                          users_root=self.s.users_root, plugin_src=self.s.plugin_src,
                          llm_base_url=f"{self.s.litellm_url}/v1")

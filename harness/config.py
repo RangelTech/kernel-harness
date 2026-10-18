@@ -103,6 +103,7 @@ class Settings:
     # --- Hermes real: segredo mestre das chaves por perfil (vazio = modo legado/fake)
     hermes_master_secret: str = ""
     plugin_src: str = "/opt/rt/plugins/rt-broker"
+    worker_system_skills_dir: str = "/skills/system"  # caminho das skills de sistema NO worker
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -142,4 +143,5 @@ class Settings:
             insecure_dev=_bool("HARNESS_INSECURE_DEV", False),
             hermes_master_secret=_env("HERMES_MASTER_SECRET"),
             plugin_src=_env("RT_PLUGIN_SRC", cls.plugin_src),
+            worker_system_skills_dir=_env("WORKER_SYSTEM_SKILLS_DIR", cls.worker_system_skills_dir),
         )

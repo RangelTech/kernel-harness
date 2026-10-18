@@ -15,7 +15,6 @@ x-hermes: &hermes
     OPENAI_API_KEY: fake-provider-key-0000000000
   volumes:
     - profiles:/opt/data/profiles
-    - system_skills:/skills/system:ro
     - tenant_skills:/skills/tenant:ro
     - users:/srv/hermes/users:ro
 
@@ -56,7 +55,6 @@ services:
     volumes:
       - home1:/opt/data
       - profiles:/opt/data/profiles
-      - system_skills:/skills/system:ro
       - tenant_skills:/skills/tenant:ro
       - users:/srv/hermes/users:ro
 
@@ -66,7 +64,6 @@ services:
     volumes:
       - home2:/opt/data
       - profiles:/opt/data/profiles
-      - system_skills:/skills/system:ro
       - tenant_skills:/skills/tenant:ro
       - users:/srv/hermes/users:ro
 
@@ -92,12 +89,10 @@ services:
       PROFILES_ROOT: /opt/data/profiles
       USERS_ROOT: /srv/hermes/users
       TENANT_SKILLS_ROOT: /skills/tenant
-      SYSTEM_SKILLS_DIR: /skills/system
       HARNESS_TENANT_CONCURRENCY: "2"
     volumes:
       - profiles:/opt/data/profiles
       - users:/srv/hermes/users
       - tenant_skills:/skills/tenant
-      - system_skills:/skills/system
 
-volumes: {profiles: {}, users: {}, tenant_skills: {}, system_skills: {}, home1: {}, home2: {}, llmlogs: {}}
+volumes: {profiles: {}, users: {}, tenant_skills: {}, home1: {}, home2: {}, llmlogs: {}}

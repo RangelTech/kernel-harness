@@ -59,7 +59,7 @@ class H(BaseHTTPRequestHandler):
         if tool_call: msg = {"role": "assistant", "content": None, "tool_calls": [tool_call]}; fin = "tool_calls"
         else:
             big = re.search(r"BIG:([0-9]+)", last)
-            content = f"N_MSGS={len(msgs)}|USERS={' // '.join(users_all)[:500]}|RESULTS={' || '.join(r[:400] for r in results)}"
+            content = f"N_MSGS={len(msgs)}|USERS={' // '.join(users_all)[:500]}|RESULTS={' || '.join(r[:4000] for r in results)}"
             if big: content += " " + ("lorem " * (int(big.group(1)) // 6))
             msg = {"role": "assistant", "content": content}; fin = "stop"
         cid = "chatcmpl-" + uuid.uuid4().hex[:8]
