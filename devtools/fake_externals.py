@@ -26,6 +26,9 @@ class FakeExternals:
         self.rm_calls: list[dict] = []
         self.exposures: dict[str, list[dict]] = {}
         self.rm_script_exit = 0
+        self.rm_exec_exit = 0
+        self.rm_autocreate = True  # False: o ambiente so nasce no rt_env_start
+        self.rm_ws: dict[str, dict] = {}
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle))
@@ -67,21 +70,37 @@ class FakeExternals:
         if not m:
             return httpx.Response(404, json={"error": "not_found"})
         t, rest = m.group(1), m.group(2) or ""
+        ws = self.rm_ws.setdefault(t, {"created": self.rm_autocreate, "running": self.rm_autocreate})
+        if req.method == "POST" and not rest:
+            ws["created"] = True
+            return httpx.Response(200, json={"tenant_id": t})
+        if not ws["created"]:
+            return httpx.Response(404, json={"error": "unknown_tenant"})
+        view = {"workspace_enabled": True, "suspended": False,
+                "observed": {"workspace": {"state": "running" if ws["running"] else "exited"}},
+                "exposures": self.exposures.get(t, []), "usage": []}
         if req.method == "GET" and not rest:
-            return httpx.Response(200, json={"workspace_enabled": True, "state": "running",
-                                             "exposures": self.exposures.get(t, [])})
+            return httpx.Response(200, json=view)
         if rest == "workspace:start":
-            return httpx.Response(200, json={"workspace_enabled": True, "state": "running",
-                                             "exposures": self.exposures.get(t, [])})
+            ws["running"] = True
+            return httpx.Response(200, json=view)
+        if rest == "workspace:stop":
+            ws["running"] = False
+            return httpx.Response(200, json=view)
+        if rest == "workspace:exec":
+            if not ws["running"]:
+                return httpx.Response(409, json={"error": "workspace_not_running"})
+            return httpx.Response(200, json={"exit_code": self.rm_exec_exit, "stdout": "ran: " + body["command"],
+                                             "stderr": ""})
         if rest == "exposures" and req.method == "POST":
             if not 1024 <= int(body.get("port", 0)) <= 65535:
                 return httpx.Response(400, json={"error": "invalid_port"})
             self.exposures.setdefault(t, []).append({"app": body["app"], "port": body["port"]})
-            return httpx.Response(200, json={"state": "running"})
+            return httpx.Response(200, json=view)
         if rest.startswith("exposures/") and req.method == "DELETE":
             app = rest.split("/", 1)[1]
             self.exposures[t] = [e for e in self.exposures.get(t, []) if e["app"] != app]
-            return httpx.Response(200, json={"state": "running"})
+            return httpx.Response(200, json=view)
         if rest == "domains":
             return httpx.Response(200, json={"host": body["host"], "txt_name": "_rt." + body["host"],
                                              "txt_value": "tok123",

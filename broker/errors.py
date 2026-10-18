@@ -4,7 +4,7 @@ from __future__ import annotations
 
 class ToolError(Exception):
     CODES = {"guardrail", "approval_denied", "approval_expired", "tool_error", "limit",
-             "invalid_args", "unavailable", "forbidden_target"}
+             "invalid_args", "unavailable", "forbidden_target", "env_error"}
 
     def __init__(self, code: str, message: str):
         super().__init__(message)

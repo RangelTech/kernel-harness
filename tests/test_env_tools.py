@@ -156,3 +156,36 @@ async def test_scheduled_run_preapproves_email_but_denies_money_and_publish(rig)
     res = await last_result(rig, tool("rt_env_expose", {"app": "x1", "port": 4000}),
                             channel="schedule")
     assert not res["ok"] and not [c for c in rig.ext.rm_calls if c["path"].endswith("/exposures")]
+
+
+async def test_env_first_use_creates_environment_then_exec_runs(rig):
+    rig.ext.rm_autocreate = False
+    res = await last_result(rig, tool("rt_env_status", {}))
+    assert res["result"]["state"] == "not_created"
+    res = await last_result(rig, tool("rt_env_start", {}))
+    assert res["result"]["state"] == "running", res
+    created = [c for c in rig.ext.rm_calls if c["method"] == "POST" and c["path"] == "/v1/tenants/t1"]
+    assert created and created[0]["scope"] == "*"  # criacao so com escopo admin do servico
+    res = await last_result(rig, tool("rt_env_exec", {"command": "echo oi"}))
+    assert res["result"]["exit_code"] == 0 and "echo oi" in res["result"]["stdout"]
+    call = next(c for c in rig.ext.rm_calls if c["path"].endswith("workspace:exec"))
+    assert call["scope"] == "t1" and call["body"]["command"] == "echo oi"
+
+
+async def test_env_exec_failure_has_hint_and_stopped_workspace_is_refused(rig):
+    rig.ext.rm_exec_exit = 2
+    res = await last_result(rig, tool("rt_env_exec", {"command": "false"}))
+    assert res["result"]["exit_code"] == 2 and "hint" in res["result"]
+    res = await last_result(rig, tool("rt_env_exec", {"command": "  "}))
+    assert res["error"]["code"] == "invalid_args"
+    await last_result(rig, tool("rt_env_stop", {}), approve="approve")
+    res = await last_result(rig, tool("rt_env_exec", {"command": "ls"}))
+    assert not res["ok"]
+
+
+def test_rm_tenant_id_is_valid_for_the_runtime_manager():
+    import re
+
+    from broker.env import rm_tenant
+    t = rm_tenant("7b1f2c3d-aaaa-bbbb-cccc-1234567890ab")
+    assert re.fullmatch(r"[a-z][a-z0-9]{3,19}", t) and t == "t7b1f2c3daaaa"
