@@ -148,7 +148,7 @@ def test_expand_tools_dedups_and_keeps_plain_names():
 
 async def test_scheduled_run_preapproves_email_but_denies_money_and_publish(rig):
     ev = await rig.send(rig.body(message=tool("rt_email_send", {
-        "account": "Suporte", "to": ["a@b.com"], "subject": "Resumo", "body": "oi"}) + "[[echo]]",
+        "account": "Financeiro", "to": ["a@b.test"], "subject": "Resumo", "body": "oi"}) + "[[echo]]",
         channel="schedule"))
     assert ev[-1].type == "done", [(e.type, e.data) for e in ev]
     res = json.loads(ev[-1].data["text"])
