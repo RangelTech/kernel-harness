@@ -79,7 +79,7 @@ class Manifest:
     learning: str = "review"   # review (padrao) | off | auto  (politica do tenant, spec 3.5)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Manifest":
+    def from_dict(cls, d: dict[str, Any]) -> Manifest:
         env = d.get("environment") or {}
         if isinstance(env, bool):
             env = {"enabled": env}

@@ -15,7 +15,6 @@ so chama `generate` quando o hash do template difere do marcador `.rt_profile_ha
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import logging
 import os

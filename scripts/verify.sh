@@ -13,4 +13,5 @@ for i in $(seq 1 30); do
 done
 curl -fsS http://127.0.0.1:18080/health | grep -q '"status":"ok"'
 curl -fsS http://127.0.0.1:18080/version | grep -q '"version"'
+docker build -q -f docker/hermes.Dockerfile -t "rt-hermes-verify:local" . >/dev/null
 echo "verify OK"

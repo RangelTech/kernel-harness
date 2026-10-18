@@ -10,7 +10,6 @@ import time
 import uuid
 
 import httpx
-import pytest
 
 from harness.security import sign_run_token
 
