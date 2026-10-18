@@ -110,6 +110,11 @@ def build_http_app(state: FakeBackend | None = None) -> FastAPI:
     async def user_skills(tenant_id: str, user_id: str):
         return {"skills": await st.get_user_skills(tenant_id, user_id)}
 
+    @app.put("/_test/user_skills/{tenant_id}/{user_id}")
+    async def seed_user_skills(tenant_id: str, user_id: str, request: Request):
+        st.user_skills[(tenant_id, user_id)] = (await request.json()).get("skills", [])
+        return {"ok": True}
+
     @app.post("/internal/approvals")
     async def approvals(request: Request):
         return {"approval_id": await st.create_approval("", "", await request.json())}
