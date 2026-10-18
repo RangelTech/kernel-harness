@@ -100,7 +100,10 @@ def pick_account(ctx: RunContext, label: str | None) -> dict:
     for a in accounts:
         if label in (a.get("label"), a.get("email_address")):
             return a
-    raise ToolError("invalid_args", f"Conta de e-mail '{label}' não encontrada.")
+    if len(accounts) == 1 and str(label).strip().lower() in ("email", "e-mail", "smtp", "default"):
+        return accounts[0]  # o agente citou o tipo em vez do rotulo: com uma so conta nao ha ambiguidade
+    labels = ", ".join(str(a.get("label")) for a in accounts)
+    raise ToolError("invalid_args", f"Conta de e-mail '{label}' não encontrada (contas: {labels}).")
 
 
 async def list_inbox(svc, ctx: RunContext, args: dict):

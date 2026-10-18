@@ -54,8 +54,17 @@ def build_instructions(agent_md: str, recall: list[dict], catalog: list[dict],
     return redactor.scrub("\n\n".join(parts))
 
 
+SCHEDULE_NOTE = (
+    "[EXECUÇÃO AGENDADA AUTOMÁTICA: ninguém está na conversa. Execute a instrução abaixo AGORA, de "
+    "ponta a ponta, usando as ferramentas. Não faça perguntas, não peça confirmação, não crie nem "
+    "altere rotinas. Ao final, escreva um resumo curto do que foi feito e de eventuais falhas.]\n\n"
+)
+
+
 def render_input(body: dict) -> str:
     text = body["message"]
+    if body.get("channel") == "schedule":
+        text = SCHEDULE_NOTE + text
     for a in body.get("attachments") or []:
         head = f"\n\n[Anexo: {a.get('name')} ({a.get('kind')}"
         if a.get("content_type"):

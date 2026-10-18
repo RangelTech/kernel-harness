@@ -264,3 +264,17 @@ def test_run_request_accepts_any_attachment_kind():
     att = schema["properties"]["attachments"]["items"]
     for kind in ("image", "audio", "video", "file", "pdf"):
         jsonschema.validate({"kind": kind, "name": "a", "storage_path": "x"}, att)
+
+
+def test_scheduled_input_is_marked_as_automatic_execution():
+    from harness.dispatcher import render_input
+    out = render_input({"message": "Envie o resumo", "channel": "schedule"})
+    assert out.startswith("[EXECUÇÃO AGENDADA") and out.endswith("Envie o resumo")
+    assert render_input({"message": "oi", "channel": "web"}) == "oi"
+
+
+async def test_email_account_cited_by_kind_resolves_when_only_one_exists(rig):
+    ev = await rig.send(rig.body(message=tool("rt_email_send", {
+        "account": "email", "to": ["a@b.test"], "subject": "x", "body": "y"}) + "[[echo]]",
+        limits={"confirm_actions": False}))
+    assert json.loads(ev[-1].data["text"])["ok"]
