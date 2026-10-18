@@ -108,6 +108,8 @@ class Paths:
     llm_base_url: str = "http://llm-gw:4000/v1"
     # comando que imprime a chave virtual do tenant (H3); vazio = usar a chave do .env/OPENAI_API_KEY
     llm_key_cmd: str = ""
+    # nome da variavel de ambiente (do worker) com a chave virtual do gateway de modelos
+    llm_key_env: str = "OPENAI_API_KEY"
 
 
 def profile_id(tenant: str, template: str, user: str | None) -> str:
@@ -193,6 +195,8 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
         disabled += ["terminal", "code_execution", "file"]
 
     model: dict[str, Any] = {"default": m.model_alias, "base_url": paths.llm_base_url}
+    if paths.llm_key_env:
+        model["key_env"] = paths.llm_key_env
     aux_model = m.aux_model_alias or m.model_alias
     cfg = _deep_merge(cfg, {
         "model": model,
@@ -253,7 +257,8 @@ def _atomic_write(path: Path, data: str, mode: int = 0o644) -> None:
 
 def write_profile(profiles_root: str | Path, tenant: str, template: str, user: str | None,
                   manifest: Manifest | dict, master_secret: str | bytes, paths: Paths | None = None,
-                  template_version: str = "current", uid: int | None = None, gid: int | None = None) -> dict:
+                  template_version: str = "current", uid: int | None = None, gid: int | None = None,
+                  llm_api_key: str = "") -> dict:
     """Cria/atualiza o perfil em disco. Devolve {profile_id, api_key, path, changed}.
 
     O perfil "nasce" (3 arquivos pequenos + symlink) na primeira chamada; nas seguintes so reescreve se o
@@ -275,7 +280,11 @@ def write_profile(profiles_root: str | Path, tenant: str, template: str, user: s
             changed = json.loads(meta_path.read_text(encoding="utf-8")).get("config_sha256") != sha
         except Exception:
             changed = True
-    env_ok = (root / ".env").is_file() and (root / ".env").read_text(encoding="utf-8").strip() == f"API_SERVER_KEY={key}"
+    env_text = f"API_SERVER_KEY={key}\n"
+    if llm_api_key and paths.llm_key_env:
+        # sob multiplex o Hermes le segredos SO do .env do perfil (nunca de os.environ)
+        env_text += f"{paths.llm_key_env}={llm_api_key}\n"
+    env_ok = (root / ".env").is_file() and (root / ".env").read_text(encoding="utf-8") == env_text
     if changed or not env_ok or not (root / "config.yaml").is_file():
         root.mkdir(parents=True, exist_ok=True)
         (root / "plugins").mkdir(exist_ok=True)
@@ -291,7 +300,7 @@ def write_profile(profiles_root: str | Path, tenant: str, template: str, user: s
             link.unlink()
         (root / ".no-bundled-skills").touch()
         # .env so com a chave da API do perfil (nenhum segredo de terceiro)
-        _atomic_write(root / ".env", f"API_SERVER_KEY={key}\n", 0o600)
+        _atomic_write(root / ".env", env_text, 0o600)
         # identidade do perfil por ultimo: config.yaml e o marcador que faz o gateway "enxergar" o perfil
         _atomic_write(meta_path, json.dumps({
             "tenant": tenant, "template": template, "user": user, "profile_id": pid,
