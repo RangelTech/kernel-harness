@@ -48,6 +48,7 @@ ENV_TOOLSETS = ["terminal", "file"]
 # cujas ferramentas o manifesto liga (uma skill nunca amplia o que o agente pode fazer). `core` sempre.
 SYSTEM_SKILL_GROUPS: dict[str, set[str] | None] = {
     "core": None,
+    "exemplos": None,   # biblioteca de trechos de codigo de referencia; sempre ativa, nunca obrigatoria
     "pix": {"rt_pix_create", "rt_payment_status", "rt_mp_read"},
     "dados": {"rt_sql_read", "rt_sql_write", "rt_sql_transaction", "rt_data_describe", "rt_mongo_find"},
     "email": {"rt_email_send", "rt_email_list"},

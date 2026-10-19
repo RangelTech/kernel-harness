@@ -21,7 +21,8 @@ def _ext(cfg):
 
 
 def test_system_skill_groups_follow_manifest_tools():
-    assert _ext(_cfg([])) == ["/skills/system/core", "/skills/tenant/tpl/current",
+    assert _ext(_cfg([])) == ["/skills/system/core", "/skills/system/exemplos",
+                              "/skills/tenant/tpl/current",
                               "/srv/hermes/users/t1/u1/skills"]
     e = _ext(_cfg(["rt_pix_create", "rt_sql_read"]))
     assert "/skills/system/pix" in e and "/skills/system/dados" in e
