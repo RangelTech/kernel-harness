@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import posixpath
 import re
+from pathlib import Path
 
 from broker import attachments as attachments_mod
 from broker.artifacts import put_artifact
@@ -115,9 +116,67 @@ def _command_env(ctx: RunContext, wanted) -> dict[str, str]:
     return {n: have[n] for n in names}
 
 
+PACKAGE_DEST = "/workspace/pacote"
+MAX_PACKAGE_UPLOAD_TOTAL = 100 * 1024 * 1024
+
+
+def _package_files(svc, ctx: RunContext, wanted: str) -> list[tuple[str, Path]]:
+    """Arquivos de `arquivos/` do pacote da VERSAO desta run (so leitura, sem sair da pasta)."""
+    from harness.profiles import ASSETS_DIR, _seg, safe_relpath
+
+    root = (Path(svc.s.tenant_skills_root) / _seg(ctx.template_id) / _seg(ctx.version_id)
+            / ASSETS_DIR)
+    if not root.is_dir():
+        raise ToolError("unavailable", "Este agente nao tem arquivos no pacote do template.")
+    base = root.resolve()
+    if wanted in ("*", ASSETS_DIR, ASSETS_DIR + "/"):
+        found = [p for p in sorted(base.rglob("*")) if p.is_file()]
+    else:
+        rel = safe_relpath(wanted)
+        if rel is None or not rel.startswith(ASSETS_DIR + "/"):
+            raise ToolError("invalid_args", "package_file deve ser 'arquivos/<nome>' ou '*'.")
+        p = (base / rel[len(ASSETS_DIR) + 1:]).resolve()
+        if base not in p.parents or not p.is_file():
+            names = ", ".join(x.relative_to(base).as_posix() for x in sorted(base.rglob("*"))
+                              if x.is_file()) or "nenhum"
+            raise ToolError("invalid_args", f"Arquivo '{rel}' nao existe no pacote "
+                                            f"(arquivos: {names}).")
+        found = [p]
+    out = [(x.relative_to(base).as_posix(), x) for x in found if base in x.resolve().parents]
+    if sum(x.stat().st_size for _, x in out) > MAX_PACKAGE_UPLOAD_TOTAL:
+        raise ToolError("limit", "Os arquivos do pacote passam de 100 MB; envie um a um.")
+    return out
+
+
+async def _upload_package(svc, ctx: RunContext, wanted: str, dest: str | None):
+    """Arquivo(s) do pacote do template -> /workspace/pacote/ no ambiente da empresa."""
+    files = _package_files(svc, ctx, wanted)
+    rmt = rm_tenant(ctx.tenant_id)
+    single = wanted not in ("*", "arquivos", "arquivos/")
+    sent = []
+    for rel, src in files:
+        if single and dest and not dest.endswith("/"):
+            path = dest
+        else:
+            path = posixpath.join(dest.rstrip("/") if dest else PACKAGE_DEST, rel)
+        data = src.read_bytes()
+        await _rm(svc).call("POST", f"/v1/tenants/{rmt}/workspace:put", scope=rmt, timeout=300.0,
+                            body={"path": path, "content_base64": base64.b64encode(data).decode()})
+        sent.append({"path": path, "size": len(data)})
+    if single:
+        return sent[0]
+    return {"files": sent, "count": len(sent)}
+
+
 async def upload(svc, ctx: RunContext, args: dict):
-    """Anexo da conversa -> arquivo no ambiente da empresa (para o agente trabalhar nele com o terminal)."""
+    """Anexo da conversa ou arquivo do pacote do template -> ambiente da empresa."""
+    if args.get("package_file"):
+        return await _upload_package(svc, ctx, str(args["package_file"]).strip(),
+                                     str(args["path"]) if args.get("path") else None)
     name = str(args.get("attachment") or "")
+    if not name:
+        raise ToolError("invalid_args", "Informe `attachment` (anexo da conversa) ou "
+                                        "`package_file` (arquivo do pacote do template).")
     data = await attachments_mod.read(svc, ctx, name)
     base = attachments_mod.find(ctx, name)["name"]
     path = str(args.get("path") or f"/workspace/inbox/{base}")
