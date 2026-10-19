@@ -28,7 +28,7 @@ def previa_xlsx(p: Path, linhas: int = 5) -> str:
 
 def previa_csv(p: Path, linhas: int = 5) -> str:
     with open(p, newline="", encoding="utf-8", errors="replace") as f:
-        return "\n".join(" | ".join(r) for _, r in zip(range(linhas), csv.reader(f)))
+        return "\n".join(" | ".join(r) for _, r in zip(range(linhas), csv.reader(f), strict=False))
 
 
 def previa(p: Path) -> str:

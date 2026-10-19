@@ -6,8 +6,8 @@ Rodar o arquivo faz uma demo do retry contra um servidor local (sem rede externa
 import os
 import threading
 import time
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Iterator
 
 import requests
 

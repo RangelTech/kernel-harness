@@ -6,6 +6,7 @@ import os
 import py_compile
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -109,7 +110,7 @@ def test_sql_sqlite_transacao(tmp_path: Path):
     m = carregar(ROOT / "sql" / "sql_exemplos.py")
     db = str(tmp_path / "t.db")
     m.sqlite_escrever(db, [("CREATE TABLE t (id INTEGER, v REAL)", ()), ("INSERT INTO t VALUES (?, ?)", (1, 5.0))])
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.Error):
         m.sqlite_escrever(db, [("UPDATE t SET v = 0", ()), ("UPDATE nao_existe SET v = 1", ())])
     assert m.sqlite_ler(db, "SELECT v FROM t WHERE id = ?", (1,)) == [{"v": 5.0}]
 

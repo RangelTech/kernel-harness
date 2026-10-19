@@ -21,7 +21,7 @@ def valor_valido(texto: str) -> Decimal:
     try:
         v = Decimal(texto.replace(",", ".")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except InvalidOperation:
-        raise SystemExit(f"valor invalido: {texto!r}")
+        raise SystemExit(f"valor invalido: {texto!r}") from None
     teto = Decimal(os.environ.get("PIX_TETO", "500.00"))
     if v <= 0:
         raise SystemExit("o valor deve ser maior que zero")
@@ -54,7 +54,7 @@ def criar(valor: Decimal, descricao: str, referencia: str, email: str) -> dict:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
-        raise SystemExit(f"Mercado Pago recusou ({e.code}): {e.read().decode()[:500]}")
+        raise SystemExit(f"Mercado Pago recusou ({e.code}): {e.read().decode()[:500]}") from e
 
 
 def main(argv: list[str]) -> None:
