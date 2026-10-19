@@ -41,7 +41,9 @@ async def run(svc, ctx: RunContext, args: dict):
         inputs[str(name)] = base64.b64encode(str(val).encode("utf-8")).decode()
     for name, val in (args.get("inputs_b64") or {}).items():
         inputs[str(name)] = str(val)
-    for name in args.get("attachments") or []:
+    # sem `attachments` explicito, todos os anexos da conversa entram em /in (o modelo nem sempre pede)
+    names = args.get("attachments") or [a["name"] for a in ctx.attachments if a.get("name")]
+    for name in names:
         # anexo da conversa vira /in/<nome> (qualquer tipo: planilha, imagem, audio, video, pdf...)
         data = await attachments_mod.read(svc, ctx, str(name))
         inputs[attachments_mod.find(ctx, str(name))["name"]] = base64.b64encode(data).decode()
