@@ -334,6 +334,17 @@ class FakeHermes:
                     "id": uuid.uuid4().hex, "kind": "skill",
                     "payload": {"action": "create", "name": pname,
                                 "content": content.replace("\\n", "\n")}}), encoding="utf-8")
+            elif name == "batchproposal":
+                # formato do Hermes atual: action=batch + operations[]
+                pname, _, content = (arg or "").partition("|")
+                d = self.profiles_root / run.profile / "pending" / "skills"
+                d.mkdir(parents=True, exist_ok=True)
+                (d / f"{uuid.uuid4().hex[:8]}.json").write_text(json.dumps({
+                    "id": uuid.uuid4().hex, "subsystem": "skills", "action": "batch",
+                    "summary": "create skill",
+                    "payload": {"action": "batch", "operations": [
+                        {"action": "create", "name": pname, "content": content.replace("\\n", "\n")}]}}),
+                    encoding="utf-8")
             elif name == "memproposal":
                 d = self.profiles_root / run.profile / "pending" / "memory"
                 d.mkdir(parents=True, exist_ok=True)
