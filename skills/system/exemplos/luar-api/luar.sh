@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Operacoes no Luar (Chatwoot). Requer LUAR_URL, LUAR_CTX e ACCOUNT_ID no ambiente.
+# Operacoes no Luar (Chatwoot). Requer LUAR_URL, LUAR_CTX e LUAR_ACCOUNT_ID no ambiente.
 # Uso: bash luar.sh conversas [status]
 #      bash luar.sh mover_card CARD_ID COLUNA_ID
 #      bash luar.sh nota_privada CONVERSA_ID "texto"
@@ -8,7 +8,7 @@ set -euo pipefail
 
 _api() {  # _api METODO CAMINHO [corpo_json]
   local metodo="$1" caminho="$2" corpo="${3:-}"
-  local args=(-sS --fail-with-body -X "$metodo" "${LUAR_URL:?}/api/v1/accounts/${ACCOUNT_ID:?}${caminho}"
+  local args=(-sS --fail-with-body -X "$metodo" "${LUAR_URL:?}/api/v1/accounts/${LUAR_ACCOUNT_ID:?}${caminho}"
               -H "X-Luar-Context: ${LUAR_CTX:?}" -H "Content-Type: application/json")
   [ -n "$corpo" ] && args+=(-d "$corpo")
   curl "${args[@]}"
@@ -22,8 +22,8 @@ conversas() {  # status: open | pending | resolved | all
     | python3 -c 'import sys,json; d=json.load(sys.stdin); [print(c["id"], c.get("status"), (c.get("meta",{}).get("sender",{}) or {}).get("name")) for c in d["data"]["payload"]]'
 }
 
-mover_card() {  # kanban: PATCH do card para outra coluna
-  _api PATCH "/rt_kanban/cards/${1:?card}" "{\"column_id\": ${2:?coluna}}"
+mover_card() {  # kanban: mover CARD_ID para ETAPA_ID (precisa do lock_version atual do card)
+  _api PATCH "/rt_kanban/cards/${1:?card}/move"     "{\"to_stage_id\": ${2:?etapa}, \"expected_lock_version\": ${3:?lock_version}, \"idempotency_key\": \"mv-${1}-${2}-${3}\"}"
 }
 
 nota_privada() {  # interna: o cliente nao ve
@@ -37,7 +37,8 @@ etiquetar() {  # substitui o conjunto de etiquetas da conversa
   _api POST "/conversations/${conversa}/labels" "{\"labels\": ${lista}}"
 }
 
-listar_cards() { _api GET "/rt_kanban/cards"; }
+quadro() { _api GET "/rt_kanban/board"; }
+listar_cards() { _api GET "/rt_kanban/cards?stage_id=${1:?etapa}&status=all"; }  # traz id e lock_version
 
 if [ "${BASH_SOURCE[0]}" = "$0" ] && [ $# -gt 0 ]; then
   "$@"
