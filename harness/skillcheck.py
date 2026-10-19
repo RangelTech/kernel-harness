@@ -203,6 +203,17 @@ FORBIDDEN_FM_KEYS = ("requires_tools", "requires_toolsets", "required_environmen
                      "required_credential_files", "fallback_for_tools", "prerequisites")
 
 
+def ensure_frontmatter(name: str, content: str, fallback_description: str = "") -> str:
+    """O modelo as vezes entrega a skill sem frontmatter: completa em vez de perder o aprendizado (description ausente num frontmatter existente continua recusada)."""
+    final = name if name.startswith("u-") else f"u-{name}"
+    fm, body, err = split_frontmatter(content)
+    first = next((ln.strip(" #*-") for ln in content.splitlines() if ln.strip(" #*-")), final)
+    desc = (fallback_description or first)[:200]
+    if err and not content.startswith("---"):
+        return f"---\nname: {final}\ndescription: {desc}\n---\n{content}"
+    return content
+
+
 def validate_user_skill(name: str, content: str, *, reserved_names: set[str],
                         secret_values: list[str]) -> tuple[str | None, str, str | None]:
     """(nome_final, conteudo_final, erro). Normaliza o prefixo `u-` quando falta."""
