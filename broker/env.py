@@ -92,6 +92,11 @@ def available_secrets(ctx: RunContext) -> dict[str, str]:
     if ctx.granted("secrets"):
         for name, value in (creds.get("secrets") or {}).items():
             out[re.sub(r"[^A-Za-z0-9_]", "_", str(name)).upper()] = str(value)
+    luar = creds.get("luar") or {}  # acesso ao proprio Luar como o usuario do chat (H-6)
+    if luar.get("token") and luar.get("url"):
+        out["LUAR_URL"] = str(luar["url"])
+        out["LUAR_CTX"] = str(luar["token"])
+        out["LUAR_ACCOUNT_ID"] = str(luar.get("account_id") or "")
     pay = creds.get("payment") or {}
     if pay.get("access_token") and ctx.granted("mercado_pago"):
         out["MERCADO_PAGO_TOKEN"] = str(pay["access_token"])
