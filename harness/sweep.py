@@ -15,7 +15,7 @@ from pathlib import Path
 from harness.backend import Backend
 from harness.config import Settings
 from harness.runctx import RunContext
-from harness.skillcheck import split_frontmatter, validate_user_skill
+from harness.skillcheck import ensure_frontmatter, split_frontmatter, validate_user_skill
 
 log = logging.getLogger("harness.sweep")
 
@@ -54,13 +54,14 @@ async def sweep_pending(settings: Settings, backend: Backend, ctx: RunContext,
                 if not has_user:
                     res.rejected += 1  # contato externo: sem camada 3 (privacidade)
                 elif action != "create" or not p.get("name") or not p.get("content"):
-                    log.info("pending skill ignorado (acao %s)", action)
+                    log.warning("pending skill ignorado run=%s (acao %s, chaves %s)", ctx.run_id, action, sorted(p))
                     res.rejected += 1
                 else:
                     name, content, err = validate_user_skill(
-                        p["name"], p["content"], reserved_names=reserved, secret_values=secrets)
+                        p["name"], ensure_frontmatter(p["name"], p["content"], str(doc.get("summary") or "")),
+                        reserved_names=reserved, secret_values=secrets)
                     if err:
-                        log.info("skill proposta recusada (%s)", err)
+                        log.warning("skill proposta recusada run=%s: %s", ctx.run_id, err)
                         res.rejected += 1
                     else:
                         fm, _b, _e = split_frontmatter(content)
