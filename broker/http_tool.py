@@ -47,8 +47,10 @@ def ip_forbidden(ip: str) -> bool:
         return True
     if getattr(addr, "ipv4_mapped", None):
         addr = addr.ipv4_mapped
-    return (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_multicast
-            or addr.is_reserved or addr.is_unspecified)
+    # `not is_global` tambem barra 100.64.0.0/10 (CGNAT/Tailscale), 192.0.0.0/24, 198.18.0.0/15 e blocos
+    # de documentacao, que `is_private` sozinho deixa passar.
+    return (not addr.is_global or addr.is_private or addr.is_loopback or addr.is_link_local
+            or addr.is_multicast or addr.is_reserved or addr.is_unspecified)
 
 
 def _resolve_text(text: str, secrets: dict, used: list[str]) -> str:
