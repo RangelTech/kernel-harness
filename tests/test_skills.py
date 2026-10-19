@@ -310,6 +310,12 @@ async def test_s8_skill_without_frontmatter_is_completed_not_lost(rig):
     assert all(p["description"] for p in rig.backend.skill_proposals)
 
 
+async def test_s8_hermes_batch_payload_is_promoted(rig):
+    content = user_skill("u-em-lote")
+    await rig.send(rig.body(chat="bt", message=f"[[batchproposal:u-em-lote|{esc(content)}]][[say:ok]]"))
+    assert [p["name"] for p in rig.backend.skill_proposals] == ["u-em-lote"]
+
+
 # ======================================================================= S9
 async def test_s9_approved_skill_is_visible_to_owner_in_any_chat_and_only_to_owner(rig):
     rig.backend.user_skills[("t1", "ana")] = [user_skills_entry("u-aprovada")]
