@@ -204,16 +204,13 @@ FORBIDDEN_FM_KEYS = ("requires_tools", "requires_toolsets", "required_environmen
 
 
 def ensure_frontmatter(name: str, content: str, fallback_description: str = "") -> str:
-    """O modelo as vezes entrega a skill sem frontmatter ou sem `description`: completa em vez de perder o aprendizado."""
+    """O modelo as vezes entrega a skill sem frontmatter: completa em vez de perder o aprendizado (description ausente num frontmatter existente continua recusada)."""
     final = name if name.startswith("u-") else f"u-{name}"
     fm, body, err = split_frontmatter(content)
     first = next((ln.strip(" #*-") for ln in content.splitlines() if ln.strip(" #*-")), final)
     desc = (fallback_description or first)[:200]
     if err and not content.startswith("---"):
         return f"---\nname: {final}\ndescription: {desc}\n---\n{content}"
-    if fm is not None and not (isinstance(fm.get("description"), str) and fm["description"].strip()):
-        fm["description"] = desc
-        return "---\n" + yaml.safe_dump(fm, allow_unicode=True, sort_keys=False) + "---\n" + body
     return content
 
 

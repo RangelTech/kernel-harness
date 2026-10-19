@@ -302,13 +302,11 @@ async def test_s8_failed_promotion_keeps_file_for_retry(rig):
     assert len(rig.backend.skill_proposals) == 1 and not list(pend.glob("*.json"))
 
 
-async def test_s8_skill_without_frontmatter_or_description_is_completed_not_lost(rig):
+async def test_s8_skill_without_frontmatter_is_completed_not_lost(rig):
     sem_fm = "# Fechamento do mes" + chr(10) + "1. somar vendas" + chr(10) + "2. conferir estoque"
-    sem_desc = chr(10).join(["---", "name: u-sem-desc", "---", "# Passos", "1. algo"])
     await rig.send(rig.body(chat="fm", message=f"[[proposal:u-sem-fm|{esc(sem_fm)}]][[say:ok]]"))
-    await rig.send(rig.body(chat="fm2", message=f"[[proposal:u-sem-desc|{esc(sem_desc)}]][[say:ok]]"))
     names = {p["name"] for p in rig.backend.skill_proposals}
-    assert names == {"u-sem-fm", "u-sem-desc"}
+    assert names == {"u-sem-fm"}
     assert all(p["description"] for p in rig.backend.skill_proposals)
 
 
