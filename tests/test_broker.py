@@ -463,7 +463,8 @@ def test_b10_host_and_ip_rules():
     assert not host_allowed("evil.com", ["partner.test"])
     assert not host_allowed("api.partner.test.evil.com", ["api.partner.test"])
     for ip in ("10.0.0.1", "127.0.0.1", "169.254.169.254", "192.168.1.1", "172.16.0.1", "::1",
-               "fe80::1", "0.0.0.0", "::ffff:10.0.0.1"):
+               "fe80::1", "0.0.0.0", "::ffff:10.0.0.1", "100.64.0.1", "100.127.255.254", "198.18.0.1",
+               "192.0.0.8", "2001:db8::1"):
         assert ip_forbidden(ip), ip
     assert not ip_forbidden("93.184.216.34")
 
