@@ -17,6 +17,7 @@ ERROR_MESSAGES = {
     "cancelled": "Execução cancelada.",
     "failed": "Não foi possível concluir a solicitação. Tente novamente em instantes.",
     "partial_answer": "A resposta ficou incompleta. Envie a mensagem novamente.",
+    "rate_limited": "O serviço de IA está com muitas solicitações agora. Tente novamente em alguns instantes.",
     "queue_expired": "Muitas solicitações no momento. Tente novamente em instantes.",
     "tool_limit": "A execução atingiu o limite de ações permitido e foi encerrada.",
     "tenant_suspended": "Este recurso está indisponível para sua empresa no momento.",

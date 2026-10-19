@@ -359,3 +359,19 @@ async def test_p10_burst_of_100_runs_leaves_no_leak(make_rig):
     assert all(w.in_use == 0 for w in rig.kernel.workers.workers.values())
     assert not rig.kernel.scheduler.queues
     assert sum(1 for h in rig.hermes for _ in h.runs) == 100
+
+
+async def test_h1_model_429_before_any_action_is_retried_then_completes(make_rig):
+    rig = await make_rig(1, model_retry_delay_s=0.05)
+    ev = await rig.send(rig.body(run_id="rl0", message="[[fail429:2]][[say:pronto]]"))
+    assert final(ev).type == "done", [(e.type, e.data) for e in ev]
+    assert text_of(ev) == "pronto"
+    assert any(e.type == "step" and e.data.get("label") == "Aguardando o modelo liberar" for e in ev)
+
+
+async def test_h1_persistent_429_ends_with_friendly_message_never_success(make_rig):
+    rig = await make_rig(1, model_retry_delay_s=0.05)
+    ev = await rig.send(rig.body(run_id="rl1", message="[[fail429:99]][[say:nunca]]"))
+    last = final(ev)
+    assert last.type == "error" and last.data["code"] == "rate_limited"
+    assert "muitas solicitações" in last.data["detail"]

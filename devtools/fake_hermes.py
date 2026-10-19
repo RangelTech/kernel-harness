@@ -9,7 +9,7 @@ Imita o contrato real medido nas POCs (anexos/04/hermes-agent-fonte.md secao 2):
 O comportamento e dirigido por diretivas no texto de entrada, na ordem em que aparecem:
   [[say:texto]]  [[think:texto]]  [[tool:rt_x {json}]]  [[skill:nome]]  [[sleep:seg]]
   [[usage:in,out]]  [[proposal:nome|conteudo com \\n]]  [[memproposal:texto]]
-  [[approvalreq]]  [[listskills]]  [[interrupted]]  [[partial]]  [[fail]]  [[empty]]
+  [[approvalreq]]  [[listskills]]  [[interrupted]]  [[partial]]  [[fail]]  [[fail429:N]]  [[empty]]
 Sem diretivas: responde `ok[n] <inicio da mensagem>` (n = turno na sessao).
 Regras de memoria da sessao: "meu codinome e X" guarda; "qual meu codinome" recupera.
 """
@@ -88,6 +88,7 @@ class FakeHermes:
         self.tokens_per_turn = tokens_per_turn
         self.http = http or httpx.AsyncClient(timeout=200.0)
         self.runs: dict[str, FakeRun] = {}
+        self.rate_limited: dict[str, int] = {}
         self.idem: dict[tuple[str, str], str] = {}
         self.sessions: dict[tuple[str, str], Session] = {}
         self.active = 0
@@ -356,6 +357,13 @@ class FakeHermes:
             elif name == "fail":
                 run.emit("run.failed", error="falha simulada")
                 return
+            elif name == "fail429":
+                key = run.profile
+                seen = self.rate_limited.get(key, 0)
+                self.rate_limited[key] = seen + 1
+                if seen < int(arg or 1):
+                    run.emit("run.failed", error="HTTP 429: litellm.RateLimitError: rate limit exceeded")
+                    return
             elif name == "empty":
                 run.emit("run.completed", output="",
                          usage=self._usage(sess, text, in_tok, out_tok, ""))
