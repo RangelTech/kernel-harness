@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import copy
 import logging
 import time
@@ -76,6 +77,14 @@ def render_input(body: dict) -> str:
         extracted = a.get("extracted_text")
         text += head + (f"\n{extracted[:30_000]}" if extracted else "")
     return text
+
+
+MAX_MODEL_RETRIES = 4
+
+
+def is_rate_limited(error: str | None) -> bool:
+    e = (error or "").lower()
+    return "429" in e or "rate limit" in e or "ratelimit" in e or "rate_limit" in e
 
 
 class Dispatcher:
@@ -172,13 +181,26 @@ class Dispatcher:
                 hbody["author"] = {"name": actor["name"], "role": actor.get("role", "")}
 
             hid = await hermes.start_run(
-                profile, hbody, idempotency_key=run_id,
+                profile, hbody, idempotency_key=run_id if not q.attempts else f"{run_id}:{q.attempts}",
                 session_key=f"user:{ctx.user_id}" if ctx.user_id else f"chat:{ctx.chat_id}")
             await self.store.set_run(run_id, status="running", hermes_run_id=hid, profile=profile)
 
             result = await self._consume(ctx, hermes, profile, hid)
+            if (not isinstance(result, str) and result.kind == "failed"
+                    and is_rate_limited(result.error) and ctx.tool_calls == 0
+                    and q.attempts < MAX_MODEL_RETRIES):
+                # 429 do provedor de modelo antes de qualquer acao: sem efeito colateral, tenta de novo
+                log.warning("modelo em rate limit run=%s tentativa=%s", run_id, q.attempts + 1)
+                terminal_done = True
+                await self.bus.publish(run_id, "step", {
+                    "kind": "queue", "label": "Aguardando o modelo liberar", "status": "start"}, ctx)
+                # espera crescente + jitter: nao martela o provedor que acabou de recusar
+                raise Requeue(self.s.model_retry_delay_s * (q.attempts + 1) * random.uniform(0.8, 1.3),
+                              "rate limit do modelo")
             terminal_done = True
             await self._finish(ctx, hermes, profile, hid, result)
+        except Requeue:
+            raise
         except HermesBusy as exc:
             # 429 persistente do worker: a run volta para a fila (nao falha)
             terminal_done = True  # nada a parar no Hermes
@@ -335,6 +357,8 @@ class Dispatcher:
                     "partial": "partial_answer"}[result.kind]
             if result.error:
                 log.warning("hermes run falhou run=%s: %s", run_id, ctx.redactor.scrub(result.error))
+            if result.kind == "failed" and is_rate_limited(result.error):
+                code = "rate_limited"
             status = {"failed": "failed", "cancelled": "cancelled",
                       "interrupted": "interrupted", "partial": "interrupted"}[result.kind]
             await self._terminal_error(ctx, code, status)

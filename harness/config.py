@@ -71,6 +71,7 @@ class Settings:
     tenant_concurrency: int = 2
     tenant_weights: dict[str, float] = field(default_factory=dict)
     queue_expiry_s: float = 60.0
+    model_retry_delay_s: float = 8.0
     queue_max_total: int = 1000
     queue_max_per_tenant: int = 50
     chat_lock_ttl_ms: int = 15_000
@@ -137,6 +138,7 @@ class Settings:
             tenant_concurrency=_int("HARNESS_TENANT_CONCURRENCY", 2),
             tenant_weights=json.loads(_env("HARNESS_TENANT_WEIGHTS", "{}")),
             queue_expiry_s=_float("HARNESS_QUEUE_EXPIRY_S", 60.0),
+            model_retry_delay_s=_float("HARNESS_MODEL_RETRY_S", 8.0),
             silence_timeout_s=_float("HARNESS_SILENCE_TIMEOUT_S", 120.0),
             turn_timeout_s=_float("HARNESS_TURN_TIMEOUT_S", 540.0),
             max_tool_calls_per_turn=_int("HARNESS_MAX_TOOL_CALLS", 40),
