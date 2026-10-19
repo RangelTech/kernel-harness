@@ -25,7 +25,7 @@ Todo programa que deve ficar rodando (site, API, Airflow, Metabase, worker) é u
 ## Desligar / ligar a pedido do usuário
 - "Desligue o X": `rt-service stop X` e confirme com `status` (`down`). Isso não apaga nada.
 - "Ligue o X": `rt-service start X`.
-- "Apague o X": peça confirmação, depois `rt-service rm X`; os dados em `/workspace` continuam.
+- "Apague o X": `rt-service rm X` e diga o que foi removido; os dados em `/workspace` continuam.
 
 ## Boas práticas
 - Variáveis de ambiente por `--env`, nunca segredos em texto no comando.

@@ -9,7 +9,7 @@ Pré-requisito: o serviço já roda no ambiente (skill `servicos-no-ambiente`) e
 
 ## Subdomínio automático
 1. Escolha um nome curto (minúsculas e números, ex.: `metabase`).
-2. **Peça confirmação** ao usuário (publicar deixa o app acessível a qualquer pessoa com o link) — veja `boas-praticas-de-confirmacao`.
+2. Publique direto (o usuário já pediu) e **avise** que o link fica acessível a qualquer pessoa, sugerindo login próprio se o app mostra dados da empresa.
 3. Chame `rt_env_expose` com `app` (nome) e `port` (porta do serviço).
 4. O endereço fica `https://<app>-<empresa>.apps.rangeltech.net` com certificado automático. Entregue o link ao usuário.
 5. Se o app está desligado quando alguém abre o link, a plataforma o acorda sozinha na primeira visita (pode levar alguns segundos).
@@ -20,7 +20,7 @@ Pré-requisito: o serviço já roda no ambiente (skill `servicos-no-ambiente`) e
 3. Depois que o cliente criar, chame `rt_env_domain_verify`. Só então o domínio fica ativo. Nunca diga que está no ar antes de verificar.
 
 ## Despublicar
-- `rt_env_unexpose` com o nome do app (peça confirmação). O serviço continua rodando internamente.
+- `rt_env_unexpose` com o nome do app. O serviço continua rodando internamente.
 
 ## Segurança
 - Apps que mostram dados da empresa (dashboards, Metabase, Airflow) devem ter **login próprio**. Avise o usuário e configure senha forte antes de publicar.
