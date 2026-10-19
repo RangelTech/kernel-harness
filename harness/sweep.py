@@ -15,7 +15,7 @@ from pathlib import Path
 from harness.backend import Backend
 from harness.config import Settings
 from harness.runctx import RunContext
-from harness.skillcheck import split_frontmatter, validate_user_skill
+from harness.skillcheck import ensure_frontmatter, split_frontmatter, validate_user_skill
 
 log = logging.getLogger("harness.sweep")
 
@@ -37,6 +37,25 @@ def reserved_skill_names(settings: Settings, template_id: str) -> set[str]:
     return names
 
 
+async def _promote_skill(backend: Backend, ctx: RunContext, op: dict, summary: str,
+                         reserved: set[str], secrets: list[str], res: SweepResult) -> None:
+    name, content, err = validate_user_skill(
+        op["name"], ensure_frontmatter(op["name"], op["content"], summary),
+        reserved_names=reserved, secret_values=secrets)
+    if err:
+        log.warning("skill proposta recusada run=%s: %s", ctx.run_id, err)
+        res.rejected += 1
+        return
+    fm, _b, _e = split_frontmatter(content)
+    out = await backend.post_skill_proposal(ctx.run_id, ctx.run_token, {
+        "tenant_id": ctx.tenant_id, "user_id": ctx.user_id,
+        "template_id": ctx.template_id, "chat_id": ctx.chat_id,
+        "name": name, "description": (fm or {}).get("description", ""),
+        "content": content, "source": "agent", "status": "pending_review"})
+    res.skills.append({"user_skill_id": str(out.get("id") or out.get("user_skill_id") or name),
+                       "name": name, "status": out.get("status", "pending_review")})
+
+
 async def sweep_pending(settings: Settings, backend: Backend, ctx: RunContext,
                         profile_home: Path) -> SweepResult:
     res = SweepResult([], 0, 0)
@@ -50,28 +69,19 @@ async def sweep_pending(settings: Settings, backend: Backend, ctx: RunContext,
             try:
                 doc = json.loads(f.read_text(encoding="utf-8"))
                 p = doc.get("payload") or {}
-                action = (p.get("action") or "create").lower()
-                if not has_user:
-                    res.rejected += 1  # contato externo: sem camada 3 (privacidade)
-                elif action != "create" or not p.get("name") or not p.get("content"):
-                    log.info("pending skill ignorado (acao %s)", action)
-                    res.rejected += 1
-                else:
-                    name, content, err = validate_user_skill(
-                        p["name"], p["content"], reserved_names=reserved, secret_values=secrets)
-                    if err:
-                        log.info("skill proposta recusada (%s)", err)
+                # o Hermes atual enfileira `batch` com operations[]; versoes antigas, uma operacao plana
+                ops = [o for o in (p.get("operations") or []) if isinstance(o, dict)]                     if str(p.get("action") or "").lower() == "batch" else [p]
+                for op in ops:
+                    action = (op.get("action") or "create").lower()
+                    if not has_user:
+                        res.rejected += 1  # contato externo: sem camada 3 (privacidade)
+                    elif action != "create" or not op.get("name") or not op.get("content"):
+                        log.warning("pending skill ignorado run=%s (acao %s, chaves %s)",
+                                    ctx.run_id, action, sorted(op))
                         res.rejected += 1
                     else:
-                        fm, _b, _e = split_frontmatter(content)
-                        out = await backend.post_skill_proposal(ctx.run_id, ctx.run_token, {
-                            "tenant_id": ctx.tenant_id, "user_id": ctx.user_id,
-                            "template_id": ctx.template_id, "chat_id": ctx.chat_id,
-                            "name": name, "description": (fm or {}).get("description", ""),
-                            "content": content, "source": "agent", "status": "pending_review"})
-                        res.skills.append({"user_skill_id": str(out.get("id") or out.get(
-                            "user_skill_id") or name), "name": name,
-                            "status": out.get("status", "pending_review")})
+                        await _promote_skill(backend, ctx, op, str(doc.get("summary") or ""),
+                                             reserved, secrets, res)
             except Exception:  # noqa: BLE001
                 log.exception("falha ao promover %s", f.name)
                 res.rejected += 1
