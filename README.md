@@ -22,7 +22,7 @@ contracts/  contrato Backend->Kernel e eventos (versionados)
 skills/     skills oficiais de sistema (SKILL.md)
 docker/     Dockerfiles
 scripts/    verify.sh (gate local)
-docs/       adr/, runbooks/, qa/, provenance.md
+docs/       adr/, runbooks/ (OPERACAO_KERNEL.md), qa/, provenance.md, ONBOARDING_SERVICO.md, GUIA_ESCREVER_AGENTE_POR_SKILLS.md
 ```
 
 ## Regras de entrega (valem para todo repo da Rangel Tech)
