@@ -33,13 +33,17 @@ class ApprovalService:
         self._waiters: dict[str, RunContext] = {}
 
     async def request(self, ctx: RunContext, *, kind: str, summary: str, risk: str,
-                      details: dict | None = None) -> str:
+                      details: dict | None = None, force: bool = False) -> str:
         """-> 'approved' | 'denied' | 'expired' | 'external_denied'.
 
         Padrao: o agente tem liberdade total e a confirmacao e feita na CONVERSA (skills). O cartao
         de confirmacao autenticado so existe quando o template liga `limits.confirm_actions`.
         """
-        if not ctx.limits.get("confirm_actions"):
+        # `confirm_actions`: true = todo tipo de acao; lista = so esses tipos; `force` = o agente
+        # pediu (rt_confirm) porque a regra do template mandou, valha o manifesto ou nao.
+        rule = ctx.limits.get("confirm_actions")
+        applies = force or rule is True or (isinstance(rule, list) and kind in rule)
+        if not applies:
             log.info("acao sem cartao (confirm_actions desligado) run=%s kind=%s", ctx.run_id, kind)
             return "approved"
         if ctx.channel == "schedule":

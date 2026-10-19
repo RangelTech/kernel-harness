@@ -17,6 +17,18 @@ async def echo(svc, ctx: RunContext, args: dict):
     return {"echo": str(args.get("text", ""))[:2000]}
 
 
+async def confirm(svc, ctx: RunContext, args: dict):
+    """Cartao de confirmacao pedido pelo agente quando a regra do template manda confirmar."""
+    summary = str(args.get("summary") or "").strip()[:500]
+    if not summary:
+        raise ToolError("invalid_args", "Descreva em uma frase o que vai acontecer.")
+    risk = args.get("risk") if args.get("risk") in ("low", "medium", "high") else "medium"
+    topic = str(args.get("topic") or "custom").strip()[:60] or "custom"
+    await svc.confirm(ctx, kind=f"custom:{topic}", risk=risk, summary=summary,
+                      details={"topic": topic}, force=True)
+    return {"approved": True, "note": "Autorizado pelo usuario. Pode executar."}
+
+
 async def search_docs(svc, ctx: RunContext, args: dict):
     query = str(args.get("query") or "").strip()
     if not query:

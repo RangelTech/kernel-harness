@@ -45,6 +45,13 @@ TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
         "Ferramenta de teste: devolve o que for enviado, ecoado pelo broker.",
         _obj({"text": {**_S, "description": "Texto a ecoar"}}, ["text"]),
     ),
+    "rt_confirm": (
+        "Pede ao usuario, em um cartao de confirmacao, autorizacao ANTES de uma acao quando a regra do "
+        "template mandar confirmar. Se negado, nao execute a acao.",
+        _obj({"summary": {**_S, "description": "Uma frase: o que vai acontecer"},
+              "risk": {"type": "string", "enum": ["low", "medium", "high"]},
+              "topic": {**_S, "description": "Assunto curto, ex.: grafico"}}, ["summary"]),
+    ),
     "rt_sql_read": (
         "Executa uma consulta SQL somente leitura (SELECT/WITH) numa fonte de dados autorizada.",
         _obj(
