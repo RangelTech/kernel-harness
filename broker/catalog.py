@@ -12,7 +12,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
 def expand_tools(tools) -> list[str]:
     """Ids do manifesto (capacidades ou ferramentas) -> nomes de ferramenta do broker, sem repetir."""
     out: list[str] = []
-    for t in tools or []:
+    for t in ["rt_confirm", *(tools or [])]:  # confirmar e sempre possivel: a regra e do template
         for name in GROUPS.get(t, (t,)):
             if name not in out:
                 out.append(name)

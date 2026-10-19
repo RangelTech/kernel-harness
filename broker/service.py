@@ -39,6 +39,7 @@ class ToolSpec:
 
 TOOLS: dict[str, ToolSpec] = {
     "rt_echo": ToolSpec(misc.echo),
+    "rt_confirm": ToolSpec(misc.confirm),
     "rt_data_describe": ToolSpec(data.describe, "datasource"),
     "rt_sql_read": ToolSpec(data.sql_read, "datasource"),
     "rt_mongo_find": ToolSpec(data.mongo_find, "datasource"),
@@ -88,9 +89,9 @@ class BrokerService:
 
     # ---------------------------------------------------------------- confirmacao
     async def confirm(self, ctx: RunContext, *, kind: str, risk: str, summary: str,
-                      details: dict | None = None) -> None:
+                      details: dict | None = None, force: bool = False) -> None:
         res = await self.approvals.request(ctx, kind=kind, summary=ctx.redactor.scrub(summary),
-                                           risk=risk, details=details)
+                                           risk=risk, details=details, force=force)
         if res == "approved":
             return
         if res == "expired":
