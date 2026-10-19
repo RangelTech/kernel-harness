@@ -5,7 +5,7 @@ description: Exemplos de curl e Python para operar o Luar (Chatwoot) por API: li
 
 # Exemplo: API do Luar
 
-Referência, não obrigação. Segredos/variáveis (em `secrets`): `LUAR_URL` (base, sem barra final), `LUAR_CTX` (contexto, vai no cabeçalho `X-Luar-Context`) e `ACCOUNT_ID`.
+Referência, não obrigação. Segredos/variáveis (em `secrets`): `LUAR_URL` (base, sem barra final), `LUAR_CTX` (contexto, vai no cabeçalho `X-Luar-Context`) e `LUAR_ACCOUNT_ID`.
 
 ## Arquivos
 - `luar.sh`: funções em bash (`conversas`, `mover_card`, `nota_privada`, `etiquetar`). Use `source luar.sh` e chame a função, ou `bash luar.sh conversas`.

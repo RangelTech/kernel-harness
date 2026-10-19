@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cliente minimo do Luar (Chatwoot). Requer LUAR_URL, LUAR_CTX e ACCOUNT_ID no ambiente."""
+"""Cliente minimo do Luar (Chatwoot). Requer LUAR_URL, LUAR_CTX e LUAR_ACCOUNT_ID no ambiente."""
 import os
 
 import requests
@@ -7,7 +7,7 @@ import requests
 
 class Luar:
     def __init__(self) -> None:
-        self.base = f'{os.environ["LUAR_URL"].rstrip("/")}/api/v1/accounts/{os.environ["ACCOUNT_ID"]}'
+        self.base = f'{os.environ["LUAR_URL"].rstrip("/")}/api/v1/accounts/{os.environ["LUAR_ACCOUNT_ID"]}'
         self.h = {"X-Luar-Context": os.environ["LUAR_CTX"], "Content-Type": "application/json"}
 
     def _req(self, metodo: str, caminho: str, **kw):
@@ -18,11 +18,19 @@ class Luar:
     def conversas(self, status: str = "open", pagina: int = 1) -> list[dict]:
         return self._req("GET", "/conversations", params={"status": status, "page": pagina})["data"]["payload"]
 
-    def cards(self) -> list[dict]:
-        return self._req("GET", "/rt_kanban/cards")
+    def quadro(self) -> dict:
+        """Etapas do Kanban (id, nome, contagem)."""
+        return self._req("GET", "/rt_kanban/board")
 
-    def mover_card(self, card_id: int, coluna_id: int) -> dict:
-        return self._req("PATCH", f"/rt_kanban/cards/{card_id}", json={"column_id": coluna_id})
+    def cards(self, etapa_id: int, status: str = "all") -> list[dict]:
+        return self._req("GET", "/rt_kanban/cards", params={"stage_id": etapa_id, "status": status})["items"]
+
+    def mover_card(self, card: dict, etapa_id: int) -> dict:
+        """card = item de cards() (traz id e lock_version). Idempotente pela chave."""
+        chave = f"mv-{card['id']}-{etapa_id}-{card['lock_version']}"
+        return self._req("PATCH", f"/rt_kanban/cards/{card['id']}/move",
+                         json={"to_stage_id": etapa_id, "expected_lock_version": card["lock_version"],
+                               "idempotency_key": chave})
 
     def nota_privada(self, conversa_id: int, texto: str) -> dict:
         """Interna: o cliente nao ve. Padrao para registrar o que voce fez."""
