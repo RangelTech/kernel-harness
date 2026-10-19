@@ -18,7 +18,7 @@ COPY --chmod=0755 plugin/image/00-rt-setup /etc/cont-init.d/00-rt-setup
 ENV API_SERVER_ENABLED=true \
     API_SERVER_HOST=0.0.0.0 \
     API_SERVER_PORT=8642 \
-    RT_BROKER_TIMEOUT_S=30
+    RT_BROKER_TIMEOUT_S=540
 
 LABEL org.opencontainers.image.description="rt-hermes: Hermes Agent headless + plugin rt-broker (kernel-harness)" \
       org.opencontainers.image.source="https://github.com/RangelTech/kernel-harness" \

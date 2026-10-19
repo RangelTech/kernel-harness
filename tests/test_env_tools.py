@@ -287,3 +287,18 @@ async def test_email_account_cited_by_kind_resolves_when_only_one_exists(rig):
         "account": "email", "to": ["a@b.test"], "subject": "x", "body": "y"}) + "[[echo]]",
         limits={"confirm_actions": False}))
     assert json.loads(ev[-1].data["text"])["ok"]
+
+
+def test_plugin_broker_timeout_covers_slow_tools_and_approvals():
+    """O plugin do worker nao pode cortar o broker antes das ferramentas lentas (executor ate 150 s,
+    espera de aprovacao 120 s): 30 s fazia o agente ver `broker_unreachable` em execucoes validas."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    plugin = (root / "plugin/rt_broker/__init__.py").read_text(encoding="utf-8")
+    m = re.search(r'RT_BROKER_TIMEOUT_S", "(\d+)"', plugin)
+    assert m and int(m.group(1)) >= 330
+    dock = (root / "docker/hermes.Dockerfile").read_text(encoding="utf-8")
+    m = re.search(r"RT_BROKER_TIMEOUT_S=(\d+)", dock)
+    assert m and int(m.group(1)) >= 330
