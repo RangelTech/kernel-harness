@@ -187,8 +187,12 @@ TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
     ),
     "rt_env_upload": (
         "Copia um anexo da conversa (qualquer arquivo: planilha, imagem, audio, video, pdf...) para o "
-        "ambiente da empresa (padrao /workspace/inbox/<nome>) para trabalhar nele com o terminal.",
-        _obj({"attachment": {**_S, "description": "Nome do anexo"}, "path": _S}, ["attachment"]),
+        "ambiente da empresa (padrao /workspace/inbox/<nome>) para trabalhar nele com o terminal. "
+        "Tambem copia arquivos que a empresa colocou no pacote do template: use `package_file` "
+        "(ex.: arquivos/cardapio.pdf, ou * para todos); chegam em /workspace/pacote/.",
+        _obj({"attachment": {**_S, "description": "Nome do anexo da conversa"},
+              "package_file": {**_S, "description": "Arquivo do pacote do template: arquivos/<nome> ou *"},
+              "path": _S}),
     ),
     "rt_env_download": (
         "Entrega ao usuario um arquivo do ambiente (qualquer tipo): vira artefato com link na conversa.",

@@ -79,7 +79,7 @@
               "items": {
                 "type": "object",
                 "required": ["path", "content"],
-                "properties": {"path": {"type": "string"}, "content": {"type": "string"}}
+                "properties": {"path": {"type": "string"}, "content": {"type": "string"}, "sha256": {"type": "string"}, "mime": {"type": "string"}, "encoding": {"enum": ["utf-8", "base64"]}}
               }
             }
           }

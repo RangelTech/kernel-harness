@@ -14,6 +14,8 @@ so chama `generate` quando o hash do template difere do marcador `.rt_profile_ha
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import logging
@@ -124,11 +126,57 @@ def safe_relpath(path: str) -> str | None:
     return p
 
 
-def _atomic_write(path: Path, content: str) -> None:
+def _atomic_write(path: Path, content: str | bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex[:8]}.tmp")
-    tmp.write_text(content, encoding="utf-8")
+    if isinstance(content, bytes):
+        tmp.write_bytes(content)
+    else:
+        tmp.write_text(content, encoding="utf-8")
     os.replace(tmp, path)
+
+
+ASSETS_DIR = "arquivos"  # pasta reservada do pacote: arquivos de qualquer tipo (spec 10, H-2)
+MAX_ASSET_BYTES = 25 * 1024 * 1024  # o backend limita a 10 MB; aqui e so um cinto de seguranca
+MAX_ASSETS_TOTAL = 100 * 1024 * 1024
+
+
+def decode_package_file(f: dict) -> bytes:
+    """Bytes do arquivo do pacote. `encoding: "base64"` = binario; senao, texto UTF-8.
+
+    Se vier `sha256`, ele e conferido contra os bytes decodificados (pacote adulterado ou
+    truncado no transporte nao chega a disco).
+    """
+    content = f.get("content")
+    if not isinstance(content, str):
+        raise ValueError(f"arquivo sem conteudo no pacote: {f.get('path')!r}")
+    if f.get("encoding") == "base64":
+        try:
+            data = base64.b64decode(content, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError(f"base64 invalido no pacote: {f.get('path')!r}") from exc
+        if len(data) > MAX_ASSET_BYTES:
+            raise ValueError(f"arquivo grande demais no pacote: {f.get('path')!r}")
+        expected = f.get("sha256")
+        if expected and hashlib.sha256(data).hexdigest() != expected:
+            raise ValueError(f"sha256 do arquivo nao confere: {f.get('path')!r}")
+        return data
+    return content.encode("utf-8")
+
+
+def list_package_assets(tenant_dir: Path | None, limit: int = 60) -> list[tuple[str, int]]:
+    """[(caminho relativo ao pacote, tamanho)] dos arquivos de `arquivos/` ja em disco."""
+    if tenant_dir is None:
+        return []
+    root = tenant_dir / ASSETS_DIR
+    if not root.is_dir():
+        return []
+    out = []
+    for p in sorted(x for x in root.rglob("*") if x.is_file() and not x.is_symlink()):
+        out.append((p.relative_to(tenant_dir).as_posix(), p.stat().st_size))
+        if len(out) >= limit:
+            break
+    return out
 
 
 class ProfileManager:
@@ -158,11 +206,16 @@ class ProfileManager:
         tmp = base / f".tmp-{uuid.uuid4().hex[:8]}"
         tmp.mkdir(parents=True, exist_ok=True)
         try:
+            total = 0
             for f in files:
                 rel = safe_relpath(f["path"])
                 if rel is None:
                     raise ValueError(f"caminho invalido no pacote: {f['path']!r}")
-                _atomic_write(tmp / rel, f["content"])
+                data = decode_package_file(f)
+                total += len(data)
+                if total > MAX_ASSETS_TOTAL + 4 * 1024 * 1024:
+                    raise ValueError("pacote do template grande demais")
+                _atomic_write(tmp / rel, data)
             (tmp / ".sha256").write_text(sha, encoding="utf-8")
             if target.exists():
                 shutil.rmtree(target)
@@ -265,3 +318,6 @@ class ProfileManager:
             if f.get("path") == "AGENTE.md":
                 return f["content"]
         return ""
+
+    def package_dir(self, template_id: str, version_id: str) -> Path:
+        return Path(self.s.tenant_skills_root) / _seg(template_id) / _seg(version_id)
