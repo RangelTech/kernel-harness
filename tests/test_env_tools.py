@@ -242,6 +242,15 @@ async def test_executor_reads_any_attachment_as_input_file(rig):
     assert res["error"]["code"] == "invalid_args" and "planilha.xlsx" in res["error"]["message"]
 
 
+async def test_executor_mounts_all_conversation_attachments_by_default(rig):
+    kw = _with_attachment(rig, b"vendas.csv", b"mes,valor\njan,1\n", "doc")
+    res = await last_result(rig, tool("rt_executor_run", {"script": "print(open('/in/vendas.csv').read())"}), **kw)
+    assert res["ok"], res
+    call = next(c for c in rig.ext.rm_calls if c["path"] == "/v1/executor/runs")
+    import base64 as b64
+    assert b64.b64decode(call["body"]["inputs"]["vendas.csv"]) == b"mes,valor\njan,1\n"
+
+
 async def test_attachment_goes_to_workspace_and_result_file_comes_back_as_artifact(rig):
     kw = _with_attachment(rig, b"video.mp4", b"MP4DATA", "video")
     res = await last_result(rig, tool("rt_env_upload", {"attachment": "video.mp4"}), **kw)
