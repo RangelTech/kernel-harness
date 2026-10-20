@@ -55,7 +55,7 @@ jobs:
                                    "BACKEND_INTERNAL_TOKEN", "HERMES_MASTER_SECRET", "LLM_WORKER_KEY"]},
               "resources": {"memory": "1g", "cpus": "1"}},
             "rt-hermes": {"img": "rt-hermes.image.tar.gz", "tag": "kernel-harness/rt-hermes:" + v,
-              "healthcheck": {"path": "/health", "expect": 200, "timeout_s": 120, "port": 8642},
+              "healthcheck": {"path": "/health", "expect": 200, "timeout_s": 600, "port": 8642},
               "env": {"required": ["RT_BROKER_TOKEN"]},
               "resources": {"memory": "2g", "cpus": "2"}},
           }
