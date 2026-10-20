@@ -18,11 +18,6 @@ COPY plugin/image/config.base.yaml /opt/rt/config.base.yaml
 COPY --chmod=0755 plugin/image/00-rt-setup /etc/cont-init.d/00-rt-setup
 COPY rt_worker /opt/rt/rt_worker
 
-# Sem servicos por perfil: o upstream cria um s6-supervise + s6-log por perfil no boot (02-reconcile) e
-# sobe um dashboard que o produto nao usa. Remove os dois; o boot deixa de ser proporcional ao n de perfis.
-RUN rm -f /etc/cont-init.d/02-reconcile-profiles /opt/hermes/docker/cont-init.d/02-reconcile-profiles \
- && rm -f /etc/s6-overlay/s6-rc.d/user/contents.d/dashboard
-
 # Padroes do modo headless (a chave API_SERVER_KEY e SEMPRE injetada em runtime, nunca na imagem).
 ENV API_SERVER_ENABLED=true \
     API_SERVER_HOST=0.0.0.0 \
@@ -42,4 +37,10 @@ EXPOSE 8642
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=4 \
   CMD ["curl", "-fsS", "-m", "4", "-o", "/dev/null", "http://127.0.0.1:8642/health"]
 
-CMD ["/opt/hermes/.venv/bin/python", "-m", "rt_worker"]
+# Sem s6-overlay: o processo do worker e o PID 1 (init: true no compose reapa orfaos). Se o front cair o
+# container sai e o Docker o recria; o zigoto e reiniciado pelo front. Roda como o usuario hermes (10000),
+# dono dos volumes de perfis, entao nao ha bootstrap de root nem servico por perfil.
+USER 10000:10000
+ENV HOME=/opt/data
+ENTRYPOINT ["/opt/hermes/.venv/bin/python", "-m", "rt_worker"]
+CMD []

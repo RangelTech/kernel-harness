@@ -88,7 +88,7 @@ class HermesClient:
                                          headers=headers, timeout=30.0)
             except httpx.HTTPError as exc:
                 raise HermesUnavailable(str(exc)) from exc
-            if r.status_code == 429:
+            if r.status_code in (429, 503):  # worker cheio ou zigoto reaquecendo: volta para a fila
                 delay = min(float(r.headers.get("retry-after", "0.3") or 0.3), 2.0)
                 last = r
                 await asyncio.sleep(max(delay, 0.1) * (attempt + 1))

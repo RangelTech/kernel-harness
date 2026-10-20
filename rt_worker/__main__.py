@@ -15,6 +15,10 @@ async def _keep_zygote(sock: str) -> None:
         proc = await asyncio.create_subprocess_exec(py, "-m", "rt_worker.zygote", sock)
         rc = await proc.wait()
         log.error("zigoto saiu (rc=%s); reiniciando em 2s", rc)
+        try:  # sem socket o /health do front fica 503 (warming) ate o novo zigoto aquecer
+            os.unlink(sock)
+        except OSError:
+            pass
         await asyncio.sleep(2)
 
 
