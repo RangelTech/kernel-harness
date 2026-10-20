@@ -127,8 +127,20 @@ class Front:
         self.stats = {"started": 0, "rejected": 0, "spawn_failed": 0, "boot_ms_last": 0.0,
                       "boot_ms_max": 0.0}
         self._sweeper: asyncio.Task | None = None
+        self.draining = False
 
     # ------------------------------------------------------------ ciclo
+    def begin_drain(self) -> None:
+        """K-10: para de aceitar runs novas (503 + Retry-After: o kernel devolve a run para a fila e o
+        /health fica 503, tirando o worker do sorteio); as runs em andamento terminam."""
+        self.draining = True
+
+    async def wait_drained(self, max_s: float) -> bool:
+        end = time.monotonic() + max_s
+        while self.active > 0 and time.monotonic() < end:
+            await asyncio.sleep(0.5)
+        return self.active == 0
+
     async def start(self) -> None:
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, sock_connect=3))
         self._sweeper = asyncio.create_task(self._sweep_loop())
@@ -191,9 +203,9 @@ class Front:
         return app
 
     async def h_health(self, request: web.Request) -> web.Response:
-        ready = self.sp.ready()
+        ready = self.sp.ready() and not self.draining
         return web.json_response({
-            "status": "ok" if ready else "warming", "mode": "ephemeral", "active": self.active, "slots": self.cfg.slots,
+            "status": "draining" if self.draining else ("ok" if ready else "warming"), "mode": "ephemeral", "active": self.active, "slots": self.cfg.slots,
             "runs": len(self.runs), **self.stats},
             status=200 if ready else 503)
 
@@ -207,6 +219,9 @@ class Front:
             return web.json_response({"error": "Unknown or unconfigured profile"}, status=404)
         if not request.headers.get("Authorization"):
             return web.json_response({"error": "missing bearer"}, status=401)
+        if self.draining:
+            return web.json_response({"error": "worker em drenagem", "code": "draining"},
+                                     status=503, headers={"Retry-After": "1"})
         idem = request.headers.get("Idempotency-Key", "").strip()
         if idem and (rid := self.idem.get((profile, idem))) and rid in self.runs:
             return web.json_response({"run_id": rid, "status": "started", "replayed": True},
@@ -322,4 +337,19 @@ async def amain() -> None:
     await site.start()
     log.info("front efemero em :%s (slots=%s)", os.environ.get("API_SERVER_PORT", "8642"),
              cfg.slots)
-    await asyncio.Event().wait()
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:  # pragma: no cover (Windows)
+            pass
+    await stop.wait()
+    # K-10: SIGTERM = drenar. Nao aceita run nova, espera as em voo (ate RT_WORKER_DRAIN_MAX_S) e sai.
+    front.begin_drain()
+    max_s = float(os.environ.get("RT_WORKER_DRAIN_MAX_S", 900))
+    log.info("drenando: %s runs em voo (ate %ss)", front.active, max_s)
+    ok = await front.wait_drained(max_s)
+    log.info("drenagem %s", "completa" if ok else "estourou o prazo; encerrando o que restou")
+    await front.stop()
+    await runner.cleanup()
