@@ -23,6 +23,7 @@ class FakeSpawner:
         self.run_delay = run_delay
         self.fail = fail
         self._pid = 1000
+        self.is_ready = True
 
     async def spawn(self, profile: str, port: int, deadline_s: float) -> int:
         if self.fail:
@@ -59,6 +60,9 @@ class FakeSpawner:
         self.servers[pid] = runner
         self.alive_pids.add(pid)
         return pid
+
+    def ready(self) -> bool:
+        return self.is_ready
 
     def alive(self, pid: int) -> bool:
         return pid in self.alive_pids
@@ -241,3 +245,18 @@ async def test_eta_da_fila_cresce_com_a_posicao(make_rig):
     rig = await make_rig(1, slots=4, run_est_s=20.0)
     s = rig.kernel.scheduler
     assert s.eta_s(1) < s.eta_s(9) <= 20 * 9 / 4 + 2
+
+
+async def test_health_503_enquanto_o_zigoto_aquece(profiles):
+    sp = FakeSpawner()
+    sp.is_ready = False
+    front, client, runner = await make(profiles, sp, slots=2)
+    try:
+        r = await client.get(f"{BASE}/health")
+        assert r.status == 503 and (await r.json())["status"] == "warming"
+        sp.is_ready = True
+        assert (await client.get(f"{BASE}/health")).status == 200
+    finally:
+        await client.close()
+        await runner.cleanup()
+        await front.stop()

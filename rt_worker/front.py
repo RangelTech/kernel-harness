@@ -61,6 +61,7 @@ class Config:
 class Spawner(Protocol):
     async def spawn(self, profile: str, port: int, deadline_s: float) -> int: ...
     def alive(self, pid: int) -> bool: ...
+    def ready(self) -> bool: ...
     def kill(self, pid: int, sig: int) -> None: ...
 
 
@@ -80,6 +81,10 @@ class ZygoteSpawner:
         if "pid" not in data:
             raise RuntimeError(f"zigoto recusou: {data.get('error')}")
         return int(data["pid"])
+
+    def ready(self) -> bool:
+        """O zigoto so cria o socket depois de aquecer: antes disso o worker nao esta pronto."""
+        return os.path.exists(self.sock)
 
     def alive(self, pid: int) -> bool:
         try:
@@ -186,9 +191,11 @@ class Front:
         return app
 
     async def h_health(self, request: web.Request) -> web.Response:
+        ready = self.sp.ready()
         return web.json_response({
-            "status": "ok", "mode": "ephemeral", "active": self.active, "slots": self.cfg.slots,
-            "runs": len(self.runs), **self.stats})
+            "status": "ok" if ready else "warming", "mode": "ephemeral", "active": self.active, "slots": self.cfg.slots,
+            "runs": len(self.runs), **self.stats},
+            status=200 if ready else 503)
 
     def _profile_ok(self, profile: str) -> bool:
         return bool(PROFILE_RE.match(profile)) and (
