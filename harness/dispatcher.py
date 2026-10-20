@@ -106,8 +106,8 @@ def confirm_actions_note(rule) -> str | None:
 
 def build_instructions(agent_md: str, recall: list[dict], catalog: list[dict],
                        redactor: Redactor, package_files: str | None = None,
-                       output_format: str = DEFAULT_OUTPUT_FORMAT,
-                       confirm_note: str | None = None) -> str:
+                       confirm_note: str | None = None,
+                       output_format: str = DEFAULT_OUTPUT_FORMAT) -> str:
     parts = [agent_md.strip() or "Você é um assistente corporativo objetivo e cordial.", BASE_RULES,
              FORMAT_RULES.get(output_format, FORMAT_RULES[DEFAULT_OUTPUT_FORMAT])]
     if confirm_note:
@@ -237,8 +237,8 @@ class Dispatcher:
                 (body.get("memory") or {}).get("recall") or [],
                 body.get("credentials_catalog") or [], ctx.redactor,
                 package_files_note(assets, f"{tenant_dir}/arquivos") if assets else None,
-                output_format_of(ctx.manifest),
-                confirm_actions_note(ctx.limits.get("confirm_actions")))
+                confirm_actions_note(ctx.limits.get("confirm_actions")),
+                output_format_of(ctx.manifest))
             hbody = {"input": render_input(body), "instructions": instructions,
                      "session_id": ctx.session_id}
             if body.get("history"):
