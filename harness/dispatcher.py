@@ -229,7 +229,9 @@ class Dispatcher:
             profile, tenant_dir = await self.profiles.ensure(
                 tenant_id=ctx.tenant_id, template_id=ctx.template_id, user_id=ctx.user_id,
                 version_id=ctx.version_id, manifest=ctx.manifest, model=body.get("model") or {},
-                skills=body.get("skills") or {})
+                skills=body.get("skills") or {},
+                # K-9: cliente externo => perfil proprio por conversa (nunca o 'shared' do template)
+                contact=ctx.chat_id if (ctx.actor or {}).get("type") == "external" else None)
             ctx.profile = profile
             assets = list_package_assets(tenant_dir)
             instructions = build_instructions(

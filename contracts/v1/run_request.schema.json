@@ -23,7 +23,7 @@
     "chat_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$"},
     "channel": {"enum": ["web", "chatwoot", "api", "schedule"]},
     "inbox_id": {"type": ["string", "null"]},
-    "message_id": {"type": "string"},
+    "message_id": {"type": ["string", "null"]},
     "template": {
       "type": "object",
       "required": ["id", "version_id", "kind"],

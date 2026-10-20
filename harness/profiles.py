@@ -43,14 +43,20 @@ def _seg(s: str | None) -> str:
     return _SAFE.sub("_", s or "shared")
 
 
-def profile_name(tenant_id: str, template_id: str, user_id: str | None) -> str:
-    return f"{_seg(tenant_id)}__{_seg(template_id)}__{_seg(user_id)}"
+def profile_name(tenant_id: str, template_id: str, user_id: str | None,
+                 contact: str | None = None) -> str:
+    if contact is not None:
+        who = "x_" + hashlib.sha256(contact.encode()).hexdigest()[:20]
+    else:
+        who = _seg(user_id)
+    return f"{_seg(tenant_id)}__{_seg(template_id)}__{who}"
 
 
-def short_profile_name(tenant_id: str, template_id: str, user_id: str | None) -> str:
+def short_profile_name(tenant_id: str, template_id: str, user_id: str | None,
+                       contact: str | None = None) -> str:
     """Id curto do Hermes (<=64, [a-z0-9_-]): o mesmo que o gerador de perfis usa em disco."""
     from profiles.profile_config import profile_id
-    return profile_id(tenant_id, template_id, user_id)
+    return profile_id(tenant_id, template_id, user_id, contact)
 
 
 def template_hash(*, version_id: str, package_sha: str, system_rev: str, manifest: dict,
@@ -95,7 +101,8 @@ class RealProfileGenerator:
         self.s = settings
 
     def generate(self, *, tenant_id: str, template_id: str, user_id: str | None, manifest: dict,
-                 model: dict, template_hash: str = "", **_: object) -> dict:
+                 model: dict, template_hash: str = "", contact: str | None = None,
+                 **_: object) -> dict:
         from profiles import profile_config as pc
         m = dict(manifest or {})
         if model and model.get("alias") and not m.get("model_alias"):
@@ -106,7 +113,7 @@ class RealProfileGenerator:
                          llm_base_url=f"{self.s.litellm_url}/v1")
         r = pc.write_profile(self.s.profiles_root, tenant_id, template_id, user_id, m,
                              self.s.hermes_master_secret, paths, template_version="current",
-                             llm_api_key=self.s.llm_worker_key)
+                             llm_api_key=self.s.llm_worker_key, contact=contact)
         return {"home": r["path"], "config_hash": template_hash}
 
 
@@ -277,10 +284,14 @@ class ProfileManager:
 
     # ---- perfil -----------------------------------------------------------
     async def ensure(self, *, tenant_id: str, template_id: str, user_id: str | None,
-                     version_id: str, manifest: dict, model: dict, skills: dict
-                     ) -> tuple[str, Path | None]:
-        name = (short_profile_name(tenant_id, template_id, user_id)
-                if self.s.hermes_master_secret else profile_name(tenant_id, template_id, user_id))
+                     version_id: str, manifest: dict, model: dict, skills: dict,
+                     contact: str | None = None) -> tuple[str, Path | None]:
+        """`contact` (K-9): id da conversa de um cliente EXTERNO. Com ele o perfil e proprio do contato
+        (nunca o 'shared' do template), sem memoria/session_search e sem skills de usuario."""
+        if contact is not None:
+            user_id = None
+        name = (short_profile_name(tenant_id, template_id, user_id, contact)
+                if self.s.hermes_master_secret else profile_name(tenant_id, template_id, user_id, contact))
         pkg = skills.get("tenant_package")
         tenant_dir = await self.materialize_tenant_package(template_id, version_id, pkg)
         user_dir = None
@@ -289,7 +300,8 @@ class ProfileManager:
                                                           skills.get("user_skills"))
         key_fp = hashlib.sha256(self.s.llm_worker_key.encode()).hexdigest()[:12]
         h = template_hash(version_id=version_id, package_sha=(pkg or {}).get("sha256", ""),
-                          system_rev=skills.get("system_rev", "") + "|" + key_fp,
+                          system_rev=skills.get("system_rev", "") + "|" + key_fp
+                          + ("|ext" if contact is not None else ""),
                           manifest=manifest, model=model)
         home = Path(self.s.profiles_root) / name
         marker = home / HASH_MARKER
@@ -298,7 +310,8 @@ class ProfileManager:
             self.gen.generate(
                 profile_name=name, profiles_root=self.s.profiles_root, tenant_id=tenant_id,
                 template_id=template_id, user_id=user_id, template_version_id=version_id,
-                template_hash=h, manifest={**manifest, "tools": expand_tools(manifest.get("tools"))},
+                template_hash=h, contact=contact,
+                manifest={**manifest, "tools": expand_tools(manifest.get("tools"))},
                 model=model,
                 skills_dirs={"system": self.s.system_skills_dir,
                              "tenant": str(Path(self.s.tenant_skills_root) / _seg(template_id)
