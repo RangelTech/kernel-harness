@@ -14,4 +14,15 @@ emite; o backend deve copiar estes arquivos para os testes dele.
 | `v1/broker_call.schema.json` | `POST /broker/v1/call` `{session_id, tool, args}` |
 | `v1/skills_validate.schema.json` | `POST /v1/skills/validate` |
 
+Eventos de progresso do stream (somente para quem tem stream, ou seja, o chat web):
+
+- `thinking` `{text}`: resumo curto do raciocinio (sem nomes internos), no maximo 400 caracteres.
+- `step` `{kind,label,status}`: ferramenta/habilidade em linguagem amigavel.
+- `agent` `{name,status}` e `subagents` `{active,total}`: subagentes em tempo real. O total
+  soma o tamanho de cada lote de delegacao; `active` cai quando o filho termina ou a delegacao acaba.
+- `done` `{text,format}`: `format` (`markdown` | `whatsapp` | `text`) vem de
+  `manifest.output_format` do pedido; o kernel tambem instrui o agente a escrever nesse formato.
+
+Canais externos nao tem stream: o consumidor (ponte) usa so o `done`/`artifact`.
+
 Eventos desconhecidos devem ser ignorados pelo consumidor. Mudanca incompativel = `v2/`.

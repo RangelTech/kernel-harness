@@ -43,6 +43,37 @@ confirmação do usuário pelo cartão da plataforma: use as ferramentas `rt_*` 
 """
 
 
+OUTPUT_FORMATS = ("markdown", "whatsapp", "text")
+DEFAULT_OUTPUT_FORMAT = "markdown"
+
+FORMAT_RULES = {
+    "markdown": (
+        "## Formato da resposta\n"
+        "Escreva a resposta em Markdown completo: títulos (#), listas, tabelas, **negrito**, "
+        "*itálico*, `código` e blocos de código com a linguagem, citações (>) e links. "
+        "Use imagens de arquivos gerados por você só com o endereço devolvido pela ferramenta."
+    ),
+    "whatsapp": (
+        "## Formato da resposta (WhatsApp)\n"
+        "A resposta será lida no WhatsApp. Use SOMENTE a formatação do WhatsApp: *negrito* com "
+        "um asterisco de cada lado, _itálico_ com sublinhados, ~tachado~ e ```monoespaçado```. "
+        "NÃO use tabelas, títulos com #, links em formato Markdown nem HTML. Para listas use "
+        "hífen (- item) em linhas separadas. Escreva mensagens curtas e diretas, em parágrafos "
+        "pequenos; para algo longo, resuma o essencial."
+    ),
+    "text": (
+        "## Formato da resposta (texto simples)\n"
+        "Responda em texto simples, sem nenhuma marcação: sem asteriscos, sublinhados, #, "
+        "tabelas, crases ou HTML. Use frases curtas e, para listas, uma linha por item com hífen."
+    ),
+}
+
+
+def output_format_of(manifest: dict | None) -> str:
+    fmt = (manifest or {}).get("output_format")
+    return fmt if fmt in OUTPUT_FORMATS else DEFAULT_OUTPUT_FORMAT
+
+
 def package_files_note(assets: list[tuple[str, int]], local_dir: str) -> str:
     """Lista os arquivos que a empresa colocou no pacote (so nome e tamanho; o conteudo e dado)."""
     lines = [f"- `{path}` ({size} bytes)" for path, size in assets]
@@ -58,8 +89,10 @@ def package_files_note(assets: list[tuple[str, int]], local_dir: str) -> str:
 
 
 def build_instructions(agent_md: str, recall: list[dict], catalog: list[dict],
-                       redactor: Redactor, package_files: str | None = None) -> str:
-    parts = [agent_md.strip() or "Você é um assistente corporativo objetivo e cordial.", BASE_RULES]
+                       redactor: Redactor, package_files: str | None = None,
+                       output_format: str = DEFAULT_OUTPUT_FORMAT) -> str:
+    parts = [agent_md.strip() or "Você é um assistente corporativo objetivo e cordial.", BASE_RULES,
+             FORMAT_RULES.get(output_format, FORMAT_RULES[DEFAULT_OUTPUT_FORMAT])]
     if package_files:
         parts.append(package_files)
     if recall:
@@ -184,7 +217,8 @@ class Dispatcher:
                 self.profiles.read_agent_md(tenant_dir, pkg),
                 (body.get("memory") or {}).get("recall") or [],
                 body.get("credentials_catalog") or [], ctx.redactor,
-                package_files_note(assets, f"{tenant_dir}/arquivos") if assets else None)
+                package_files_note(assets, f"{tenant_dir}/arquivos") if assets else None,
+                output_format_of(ctx.manifest))
             hbody = {"input": render_input(body), "instructions": instructions,
                      "session_id": ctx.session_id}
             if body.get("history"):
@@ -394,7 +428,8 @@ class Dispatcher:
         if not result.text.strip():
             await self._terminal_error(ctx, "empty_answer", "failed")
             return
-        await self.bus.publish(run_id, "done", {"text": result.text}, ctx)
+        await self.bus.publish(run_id, "done", {"text": result.text,
+                                                "format": output_format_of(ctx.manifest)}, ctx)
         await self.store.mark_terminal(run_id, "completed")
         self.stats["completed"] += 1
         try:
