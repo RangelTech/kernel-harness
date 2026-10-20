@@ -260,3 +260,26 @@ async def test_health_503_enquanto_o_zigoto_aquece(profiles):
         await client.close()
         await runner.cleanup()
         await front.stop()
+
+
+async def test_drenagem_recusa_novas_e_conclui_as_em_voo(profiles):
+    sp = FakeSpawner(run_delay=0.3)
+    front, client, runner = await make(profiles, sp, slots=4)
+    try:
+        r = await client.post(f"{BASE}/p/u-aaa/v1/runs", json={"input": "x"}, headers=H)
+        assert r.status == 202
+        rid = (await r.json())["run_id"]
+        front.begin_drain()
+        r2 = await client.post(f"{BASE}/p/u-bbb/v1/runs", json={"input": "y"}, headers=H)
+        assert r2.status == 503 and (await r2.json())["code"] == "draining"
+        assert r2.headers.get("Retry-After") == "1"
+        h = await client.get(f"{BASE}/health")
+        assert h.status == 503 and (await h.json())["status"] == "draining"
+        assert front.active == 1
+        ev = await client.get(f"{BASE}/p/u-aaa/v1/runs/{rid}/events", headers=H)
+        assert b"run.completed" in await ev.read()
+        assert await front.wait_drained(5)
+    finally:
+        await client.close()
+        await runner.cleanup()
+        await front.stop()
