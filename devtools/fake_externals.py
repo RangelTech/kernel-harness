@@ -40,6 +40,9 @@ class FakeExternals:
     def handle(self, req: httpx.Request) -> httpx.Response:
         self.requests.append(req)
         host, path = req.url.host, req.url.path
+        # rt_http conecta no IP validado e preserva o nome no cabecalho Host
+        if req.headers.get("host") and req.headers["host"].split(":")[0] != host:
+            host = req.headers["host"].split(":")[0]
         if host == "api.mercadopago.com":
             return self._mp(req, path)
         if host == "rm.fake":
