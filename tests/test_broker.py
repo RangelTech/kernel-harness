@@ -511,6 +511,52 @@ async def test_b10_rt_http_write_methods_need_confirmation(rig):
     assert res["ok"]
 
 
+async def test_b10_dns_rebinding_resolve_uma_vez_e_conecta_no_ip_validado(rig):
+    """Resolvedor que muda de resposta a cada chamada: o IP validado e o IP usado."""
+    calls: list[str] = []
+    answers = [["93.184.216.34"], ["169.254.169.254"], ["10.0.0.5"]]
+
+    async def flip(host: str) -> list[str]:
+        calls.append(host)
+        return answers[min(len(calls) - 1, len(answers) - 1)]
+
+    rig.kernel.broker.resolver = flip
+    res = await last_result(rig, tool("rt_http", {
+        "method": "GET", "url": "https://api.partner.test:8443/v1/x?q=1"}))
+    assert res["ok"], res
+    assert calls == ["api.partner.test"]  # uma unica resolucao
+    req = next(r for r in rig.ext.requests if r.url.host == "93.184.216.34")
+    assert req.headers["host"] == "api.partner.test:8443"
+    assert req.extensions["sni_hostname"] == "api.partner.test"
+    assert (req.url.port, req.url.path, req.url.query) == (8443, "/v1/x", b"q=1")
+    assert not [r for r in rig.ext.requests if r.url.host == "api.partner.test"]
+
+
+async def test_b10_resposta_com_um_ip_proibido_barra_tudo(rig):
+    async def mixed(host: str) -> list[str]:
+        return ["93.184.216.34", "100.64.0.9"]
+
+    rig.kernel.broker.resolver = mixed
+    res = await last_result(rig, tool("rt_http", {"method": "GET",
+                                                  "url": "https://api.partner.test/"}))
+    assert res["error"]["code"] == "forbidden_target"
+    assert not rig.ext.partner_calls
+
+
+def test_b10_pinned_target_e_ipv6_transicao():
+    from broker.http_tool import pinned_target
+    url, hdr, ext = pinned_target("https://api.x.test/a?b=1", "93.184.216.34")
+    assert url == "https://93.184.216.34/a?b=1"
+    assert hdr == {"Host": "api.x.test"} and ext == {"sni_hostname": "api.x.test"}
+    url, hdr, _ = pinned_target("http://api.x.test:81/", "2606:4700::1111")
+    assert url == "http://[2606:4700::1111]:81/" and hdr == {"Host": "api.x.test:81"}
+    _, _, ext = pinned_target("http://8.8.8.8/", "8.8.8.8")
+    assert ext == {}
+    for ip in ("64:ff9b::a00:1", "2002:a00:1::", "::ffff:100.64.0.1", "::ffff:169.254.169.254"):
+        assert ip_forbidden(ip), ip
+    assert not ip_forbidden("2606:4700::1111")
+
+
 # ======================================================================= B11
 async def test_b11_artifact_put_roundtrip_and_validation(rig):
     payload = b"%PDF-1.4 conteudo"

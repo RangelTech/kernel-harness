@@ -7,7 +7,7 @@ import ipaddress
 import json
 import re
 import socket
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -40,6 +40,16 @@ def host_allowed(host: str, allowed: list[str]) -> bool:
     return False
 
 
+_V6_TRANSITION = [ipaddress.ip_network(n) for n in (
+    "64:ff9b::/96", "64:ff9b:1::/48", "2002::/16", "2001::/32")]
+
+
+# Fixo e explicito: `is_global` muda entre versoes do Python (ex.: 192.0.0.8).
+_V4_BLOCKED = [ipaddress.ip_network(n) for n in (
+    "0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "192.88.99.0/24", "198.18.0.0/15",
+    "240.0.0.0/4")]
+
+
 def ip_forbidden(ip: str) -> bool:
     try:
         addr = ipaddress.ip_address(ip.split("%")[0])
@@ -47,6 +57,10 @@ def ip_forbidden(ip: str) -> bool:
         return True
     if getattr(addr, "ipv4_mapped", None):
         addr = addr.ipv4_mapped
+    if addr.version == 4 and any(addr in n for n in _V4_BLOCKED):
+        return True
+    if addr.version == 6 and any(addr in n for n in _V6_TRANSITION):
+        return True  # NAT64/6to4/Teredo embutem um IPv4 arbitrario (pode ser interno)
     # `not is_global` tambem barra 100.64.0.0/10 (CGNAT/Tailscale), 192.0.0.0/24, 198.18.0.0/15 e blocos
     # de documentacao, que `is_private` sozinho deixa passar.
     return (not addr.is_global or addr.is_private or addr.is_loopback or addr.is_link_local
@@ -92,14 +106,16 @@ async def call(svc, ctx: RunContext, args: dict):
     if allowed and not host_allowed(host, allowed):
         raise ToolError("forbidden_target", f"O host '{host}' não está liberado para este agente.")
 
-    # destino resolvido e checado (IP privado/metadata/loopback sao proibidos)
+    # O nome e resolvido UMA vez; todos os IPs sao validados e a conexao vai ao IP validado
+    # (Host/SNI preservados). Resolver de novo na conexao permitiria DNS rebinding.
     if _is_ip_literal(host):
-        ips = [host]
+        ips = [host.strip("[]")]
     else:
         try:
             ips = await svc.resolver(host)
         except OSError as exc:
             raise ToolError("unavailable", "Não foi possível resolver o endereço.") from exc
+    ips = list(dict.fromkeys(ips or []))
     if not ips or any(ip_forbidden(ip) for ip in ips):
         raise ToolError("forbidden_target", "O endereço de destino não é permitido.")
 
@@ -131,15 +147,48 @@ async def call(svc, ctx: RunContext, args: dict):
     kwargs: dict = {}
     if body is not None:
         kwargs["json" if not isinstance(body, str) else "content"] = body
-    try:
-        r = await svc.http.request(method, final_url, headers=headers, timeout=timeout,
-                                   follow_redirects=False, **kwargs)
-    except httpx.HTTPError as exc:
-        raise ToolError("unavailable", f"A chamada falhou ({type(exc).__name__}).") from exc
+    r = await _send_pinned(svc, method, final_url, ips, headers, timeout, kwargs)
     text = r.text[: svc.s.http_max_response_chars]
     return {"status": r.status_code, "body": text,
             "truncated": len(r.text) > svc.s.http_max_response_chars,
             "content_type": r.headers.get("content-type", "")}
+
+
+def pinned_target(url: str, ip: str) -> tuple[str, dict[str, str], dict]:
+    """Reescreve a URL para o IP validado. Devolve (url, cabecalho Host, extensions).
+
+    `Host` mantem o nome original (e a porta, se explicita) e `sni_hostname` faz o TLS usar o
+    nome original para SNI e para verificar o certificado, entao HTTPS continua valido."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    port = parts.port
+    netloc_ip = f"[{ip}]" if ":" in ip else ip
+    if port:
+        netloc_ip += f":{port}"
+    host_header = f"[{host}]" if ":" in host else host
+    if port:
+        host_header += f":{port}"
+    ext: dict = {} if _is_ip_literal(host) else {"sni_hostname": host}
+    url_ip = urlunsplit((parts.scheme, netloc_ip, parts.path, parts.query, ""))
+    return url_ip, {"Host": host_header}, ext
+
+
+async def _send_pinned(svc, method, url, ips, headers, timeout, kwargs):
+    """Tenta cada IP ja validado, na ordem; so cai para o proximo se nao conectou."""
+    last: Exception | None = None
+    for ip in ips:
+        target, host_hdr, ext = pinned_target(url, ip)
+        try:
+            return await svc.http.request(method, target, headers={**headers, **host_hdr},
+                                          timeout=timeout, follow_redirects=False,
+                                          extensions=ext, **kwargs)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            last = exc
+        except httpx.HTTPError as exc:
+            raise ToolError("unavailable",
+                            f"A chamada falhou ({type(exc).__name__}).") from exc
+    raise ToolError("unavailable",
+                    f"A chamada falhou ({type(last).__name__ if last else 'sem destino'}).")
 
 
 def _is_ip_literal(host: str) -> bool:
