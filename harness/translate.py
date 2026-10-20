@@ -47,7 +47,9 @@ TOOL_LABELS: dict[str, tuple[str, str]] = {
     "skills_list": ("tool", "Consultando as habilidades disponíveis"),
     "skill_manage": ("tool", "Registrando um aprendizado"),
     "todo_list": ("plan", "Planejando os próximos passos"),
+    "delegate_task": ("plan", "Dividindo o trabalho em subtarefas"),
 }
+DELEGATE_TOOLS = frozenset({"delegate_task"})
 GENERIC_LABEL = "Executando uma ação"
 INTERNAL_WORDS = re.compile(r"hermes|harness|kernel|rt_|broker|profile|perfil interno", re.I)
 
@@ -162,6 +164,24 @@ def strip_think(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text or "", flags=re.S).strip()
 
 
+# ------------------------------------------------------------- "pensando"
+THINKING_MAX = 280
+_THINK_TAGS = re.compile(r"</?(?:think|thinking|reasoning)>", re.I)
+_TOOL_NAME = re.compile(r"\brt_[a-z0-9_]+\b", re.I)
+_INTERNAL_NAME = re.compile(r"\b(?:hermes|harness|kernel|broker)\b", re.I)
+
+
+def friendly_thinking(text: str, limit: int = THINKING_MAX) -> str:
+    """Resumo do raciocinio em linguagem de produto: sem tags, sem nomes internos, curto."""
+    t = _THINK_TAGS.sub(" ", text or "")
+    t = _TOOL_NAME.sub("uma ferramenta", t)
+    t = _INTERNAL_NAME.sub("o sistema", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    if len(t) > limit:
+        t = t[:limit].rsplit(" ", 1)[0].rstrip(",;:.") + "…"
+    return t
+
+
 # ----------------------------------------------------------------- tradutor
 @dataclass
 class Outcome:
@@ -189,6 +209,38 @@ class EventTranslator:
         self.emitted_artifacts: set[str] = set()
         self.tool_count = 0
         self.denied_commands = 0
+        self.last_thinking = ""
+        # subagentes: chave -> lote (delegation_id); contagem derivada dos eventos de delegacao
+        self._sub_active: set[str] = set()
+        self._sub_seen: set[str] = set()
+        self._sub_expected: dict[str, int] = {}
+        self._sub_started: dict[str, int] = {}
+        self._sub_batch: dict[str, str] = {}
+        self._sub_last: tuple[int, int] | None = None
+        self._sub_seq = 0
+
+    # ---- contador de subagentes ativos/total (contrato SSE `subagents`)
+    def subagent_counts(self) -> tuple[int, int]:
+        total = sum(max(self._sub_expected.get(b, 0), self._sub_started.get(b, 0))
+                    for b in set(self._sub_expected) | set(self._sub_started))
+        return len(self._sub_active), total
+
+    def _subagents_event(self) -> list[tuple[str, dict]]:
+        active, total = self.subagent_counts()
+        if (active, total) == self._sub_last:
+            return []
+        self._sub_last = (active, total)
+        return [("subagents", {"active": active, "total": total})]
+
+    def _sub_key(self, d: dict) -> tuple[str, str]:
+        batch = str(d.get("delegation_id") or d.get("parent_id") or "-")
+        ident = d.get("subagent_id") or d.get("child_session_id")
+        if ident is None and d.get("task_index") is not None:
+            ident = f"{batch}#{d.get('task_index')}"
+        if ident is None:
+            self._sub_seq += 1
+            ident = f"anon#{self._sub_seq}"
+        return batch, str(ident)
 
     def translate(self, ev: HermesEvent) -> Signals:  # noqa: C901 - tabela de eventos
         sig = Signals()
@@ -206,7 +258,11 @@ class EventTranslator:
                     self.text_parts.append(t)
                     sig.events.append(("token", {"text": t}))
         elif name == "reasoning.available":
-            pass  # raciocinio nunca vai ao cliente
+            # resumo curto e sem nomes internos; o texto bruto do modelo nunca passa
+            t = friendly_thinking(d.get("text") or "")
+            if t and t != self.last_thinking:
+                self.last_thinking = t
+                sig.events.append(("thinking", {"text": t}))
         elif name == "tool.started":
             tool = d.get("tool") or ""
             preview = d.get("preview") or ""
@@ -218,6 +274,10 @@ class EventTranslator:
             sig.events.append(("step", {"kind": kind, "label": label, "status": "start"}))
         elif name == "tool.completed":
             tool = d.get("tool") or ""
+            if tool in DELEGATE_TOOLS and self._sub_active:
+                # a delegacao terminou: nenhum filho segue ativo (evita contador preso)
+                self._sub_active.clear()
+                sig.events.extend(self._subagents_event())
             stack = self.pending_tools.get(tool) or []
             kind, label = stack.pop(0) if stack else tool_label(tool, "", self.system_skills)
             status = "error" if d.get("error") else "done"
@@ -230,11 +290,30 @@ class EventTranslator:
                         self.emitted_artifacts.add(art["artifact_id"])
                         sig.events.append(("artifact", art))
         elif name == "subagent.start":
+            batch, key = self._sub_key(d)
+            if key not in self._sub_seen:
+                self._sub_seen.add(key)
+                self._sub_started[batch] = self._sub_started.get(batch, 0) + 1
+            self._sub_batch[key] = batch
+            try:
+                n = int(d.get("task_count") or 0)
+            except (TypeError, ValueError):
+                n = 0
+            if n > 0:
+                self._sub_expected[batch] = max(self._sub_expected.get(batch, 0), min(n, 50))
+            self._sub_active.add(key)
             sig.events.append(("agent", {"name": _short(d.get("goal") or "subtarefa"),
                                          "status": "start"}))
+            sig.events.extend(self._subagents_event())
         elif name == "subagent.complete":
+            _, key = self._sub_key(d)
+            if key in self._sub_active:
+                self._sub_active.discard(key)
+            elif self._sub_active and key.startswith("anon#"):
+                self._sub_active.pop()  # sem id: o evento so fecha um filho em aberto
             sig.events.append(("agent", {"name": _short(d.get("goal") or "subtarefa"),
                                          "status": "done"}))
+            sig.events.extend(self._subagents_event())
         elif name == "approval.request":
             # comandos nunca sao aprovados pelo kernel: deny automatico (R-04)
             self.denied_commands += 1

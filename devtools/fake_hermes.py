@@ -9,6 +9,7 @@ Imita o contrato real medido nas POCs (anexos/04/hermes-agent-fonte.md secao 2):
 O comportamento e dirigido por diretivas no texto de entrada, na ordem em que aparecem:
   [[say:texto]]  [[think:texto]]  [[tool:rt_x {json}]]  [[skill:nome]]  [[sleep:seg]]
   [[usage:in,out]]  [[proposal:nome|conteudo com \\n]]  [[memproposal:texto]]
+  [[reason:texto]]  [[sub:objetivo|id|tarefas]]  [[subdone:id|objetivo]]
   [[approvalreq]]  [[listskills]]  [[interrupted]]  [[partial]]  [[fail]]  [[fail429:N]]  [[empty]]
 Sem diretivas: responde `ok[n] <inicio da mensagem>` (n = turno na sessao).
 Regras de memoria da sessao: "meu codinome e X" guarda; "qual meu codinome" recupera.
@@ -296,6 +297,17 @@ class FakeHermes:
                     await asyncio.sleep(0)
             elif name == "think":
                 run.emit("message.delta", delta=f"<think>{arg}</think>")
+            elif name == "reason":
+                run.emit("reasoning.available", text=arg or "")
+            elif name == "sub":
+                goal, _, rest = (arg or "").partition("|")
+                sid, _, count = rest.partition("|")
+                run.emit("subagent.start", goal=goal, subagent_id=sid or None,
+                         delegation_id="d1", task_count=int(count) if count else None)
+            elif name == "subdone":
+                sid, _, goal = (arg or "").partition("|")
+                run.emit("subagent.complete", goal=goal, subagent_id=sid or None,
+                         delegation_id="d1", status="completed")
             elif name == "sleep":
                 if await self._interruptible(run, float(arg or 1)):
                     run.emit("run.cancelled")

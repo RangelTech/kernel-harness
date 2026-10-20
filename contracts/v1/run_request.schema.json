@@ -112,6 +112,7 @@
           }
         },
         "environment": {"type": "object", "properties": {"enabled": {"type": "boolean"}}},
+        "output_format": {"enum": ["markdown", "whatsapp", "text"], "default": "markdown"},
         "limits": {
           "type": "object",
           "properties": {
