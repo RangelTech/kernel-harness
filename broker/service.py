@@ -151,7 +151,11 @@ class BrokerService:
             if ctx.tool_calls > self._call_cap(ctx):
                 raise ToolError("limit", "Limite de ações do turno atingido. Responda agora com o "
                                          "que já tem.")
-            result = await spec.handler(self, ctx, args)
+            ctx.tool_begin()
+            try:
+                result = await spec.handler(self, ctx, args)
+            finally:
+                ctx.tool_end()
             payload = {"ok": True, "result": result}
             code = "ok"
         except ToolError as exc:

@@ -67,6 +67,10 @@ class RunContext:
     approvals: dict[str, ApprovalWait] = field(default_factory=dict)
     paused_total: float = 0.0
     _pause_started: float | None = None
+    # ferramenta do broker em andamento (exec longo no ambiente): nao conta como silencio
+    busy_depth: int = 0
+    busy_total: float = 0.0
+    _busy_started: float | None = None
     cancelled: asyncio.Event = field(default_factory=asyncio.Event)
     # saida para o stream do produto (injetado pelo dispatcher)
     emit: Any = None
@@ -111,6 +115,23 @@ class RunContext:
         now = time.monotonic()
         ongoing = (now - self._pause_started) if self._pause_started is not None else 0.0
         return now - self.paused_total - ongoing
+
+    # ---- ferramenta em andamento (o relogio de silencio nao anda enquanto ela roda)
+    def tool_begin(self) -> None:
+        self.busy_depth += 1
+        if self._busy_started is None:
+            self._busy_started = time.monotonic()
+
+    def tool_end(self) -> None:
+        self.busy_depth = max(0, self.busy_depth - 1)
+        if self.busy_depth == 0 and self._busy_started is not None:
+            self.busy_total += time.monotonic() - self._busy_started
+            self._busy_started = None
+
+    def silence_now(self) -> float:
+        """Relogio do timeout de silencio: tempo efetivo menos o tempo em ferramenta."""
+        ongoing = (time.monotonic() - self._busy_started) if self._busy_started is not None else 0.0
+        return self.effective_now() - self.busy_total - ongoing
 
     # ---- esquecer
     def forget(self) -> None:
