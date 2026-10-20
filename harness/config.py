@@ -33,7 +33,7 @@ class WorkerSpec:
     url: str
     key: str = ""
     broker_token: str = ""  # token do pool deste worker (identifica o worker no broker)
-    slots: int = 4  # = gateway.api_server.max_concurrent_runs
+    slots: int = 8  # = RT_WORKER_SLOTS do front do worker efemero
 
 
 @dataclass
@@ -49,6 +49,7 @@ class Settings:
     # --- workers
     workers: list[WorkerSpec] = field(default_factory=list)
     worker_health_interval_s: float = 5.0
+    worker_probe_failures: int = 3  # falhas seguidas de /health ate marcar o worker fora
     # --- backend / servicos
     backend_url: str = "http://backend:8090"
     backend_internal_token: str = ""
@@ -70,7 +71,8 @@ class Settings:
     # --- fila / agendamento (spec 5.3)
     tenant_concurrency: int = 2
     tenant_weights: dict[str, float] = field(default_factory=dict)
-    queue_expiry_s: float = 60.0
+    queue_expiry_s: float = 180.0  # espera maxima na fila (a posicao e a estimativa aparecem ao usuario)
+    run_est_s: float = 25.0  # duracao media estimada de uma run, para o ETA da fila
     model_retry_delay_s: float = 8.0
     queue_max_total: int = 1000
     queue_max_per_tenant: int = 50
@@ -81,7 +83,7 @@ class Settings:
     idempotency_ttl_s: int = 86_400
     # --- limites da run (spec 4.3)
     silence_timeout_s: float = 120.0
-    turn_timeout_s: float = 540.0
+    turn_timeout_s: float = 900.0
     max_tool_calls_per_turn: int = 40
     tool_output_limit: int = 24_000
     sql_max_rows: int = 50_000
@@ -122,6 +124,8 @@ class Settings:
             broker_tokens=_csv("HARNESS_BROKER_TOKENS"),
             workers=workers,
             worker_health_interval_s=_float("HARNESS_WORKER_HEALTH_INTERVAL_S", 5.0),
+            worker_probe_failures=_int("HARNESS_WORKER_PROBE_FAILURES", 3),
+            run_est_s=_float("HARNESS_RUN_EST_S", 25.0),
             backend_url=_env("BACKEND_URL", cls.backend_url),
             backend_internal_token=_env("BACKEND_INTERNAL_TOKEN"),
             litellm_url=_env("LITELLM_URL", cls.litellm_url),
@@ -137,10 +141,10 @@ class Settings:
             system_skills_dir=_env("SYSTEM_SKILLS_DIR", cls.system_skills_dir),
             tenant_concurrency=_int("HARNESS_TENANT_CONCURRENCY", 2),
             tenant_weights=json.loads(_env("HARNESS_TENANT_WEIGHTS", "{}")),
-            queue_expiry_s=_float("HARNESS_QUEUE_EXPIRY_S", 60.0),
+            queue_expiry_s=_float("HARNESS_QUEUE_EXPIRY_S", 180.0),
             model_retry_delay_s=_float("HARNESS_MODEL_RETRY_S", 8.0),
             silence_timeout_s=_float("HARNESS_SILENCE_TIMEOUT_S", 120.0),
-            turn_timeout_s=_float("HARNESS_TURN_TIMEOUT_S", 540.0),
+            turn_timeout_s=_float("HARNESS_TURN_TIMEOUT_S", 900.0),
             max_tool_calls_per_turn=_int("HARNESS_MAX_TOOL_CALLS", 40),
             tool_output_limit=_int("HARNESS_TOOL_OUTPUT_LIMIT", 24_000),
             approval_timeout_s=_float("HARNESS_APPROVAL_TIMEOUT_S", 120.0),

@@ -38,6 +38,7 @@ class Worker:
     in_use: int = 0
     fail_reason: str = ""
     runs_total: int = 0
+    probe_failures: int = 0
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     @property
@@ -97,10 +98,18 @@ class WorkerRegistry:
             reason = "" if ok else f"http {r.status_code}"
         except httpx.HTTPError as exc:
             ok, reason = False, type(exc).__name__
+        if ok:
+            w.probe_failures = 0
+        else:
+            # um /health lento sob carga nao e worker morto: so marca fora apos N falhas seguidas
+            w.probe_failures += 1
+            if w.healthy and w.probe_failures < self.s.worker_probe_failures:
+                w.fail_reason = reason
+                return True
         if ok and not w.healthy:
             log.info("worker %s voltou", w.id)
         if not ok and w.healthy:
-            log.warning("worker %s fora: %s", w.id, reason)
+            log.warning("worker %s fora: %s (%d falhas seguidas)", w.id, reason, w.probe_failures)
         w.healthy, w.fail_reason = ok, reason
         return ok
 

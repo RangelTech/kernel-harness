@@ -390,6 +390,11 @@ class Scheduler:
                     return True
         return False
 
+    def eta_s(self, position: int) -> int:
+        """Estimativa grosseira: runs a frente / slots livres do pool x duracao media."""
+        slots = max(1, sum(w.spec.slots for w in self.workers.workers.values() if w.healthy))
+        return int(round(position / slots * self.settings.run_est_s)) + 1
+
     def ordered_queue(self) -> list[QueuedRun]:
         allq = [q for lst in self.queues.values() for q in lst]
         allq.sort(key=lambda q: (q.priority, q.enq_ts))
@@ -399,9 +404,10 @@ class Scheduler:
         for pos, q in enumerate(self.ordered_queue(), start=1):
             if q.last_position != pos:
                 q.last_position = pos
+                eta = self.eta_s(pos)
                 await self.bus.publish(q.run_id, "step", {
-                    "kind": "queue", "label": f"Na fila (posição {pos})", "status": "start",
-                    "position": pos})
+                    "kind": "queue", "label": f"Na fila (posição {pos})",
+                    "status": "start", "position": pos, "eta_s": eta})
 
     def stats(self) -> dict:
         return {"queued": self.queued_total(), "running": sum(self.running.values()),
