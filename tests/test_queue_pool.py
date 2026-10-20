@@ -342,7 +342,9 @@ async def test_p9_profile_name_is_per_company_template_and_user(rig):
     await rig.send(rig.body(tenant="t1", user=None, actor_type="external", channel="api",
                             message="b"))
     profiles = {r["profile"] for r in rig.hermes[0].requests}
-    assert profiles == {"t1__tpl1__u1", "t1__tpl1__shared"}
+    # K-9: o externo ganha perfil proprio por conversa (nunca o 'shared' do template)
+    assert len(profiles) == 2 and "t1__tpl1__u1" in profiles
+    assert not any(p.endswith("__shared") for p in profiles)
 
 
 # --------------------------------------------------------------------- P10

@@ -36,7 +36,10 @@ TOOL_NAME_RE = re.compile(r"^rt_[a-z0-9_]{1,60}$")
 NO_ENV_SSH_HOST = "ambiente-desligado.invalid"
 PLUGIN_ID = "rt-broker"
 PLATFORM_TOOLSET = "rt_platform"
-CORE_TOOLSETS = ["skills", "memory", "session_search", "todo"]  # sempre presentes
+CORE_TOOLSETS = ["skills", "memory", "session_search", "todo"]  # sempre presentes (membros da empresa)
+# K-9: contato EXTERNO (cliente final) nunca ve memoria nem busca de sessoes: `session_search` le o state.db do
+# perfil (e aceita `profile=` para abrir o de outro perfil) e `memory` persiste entre conversas.
+EXTERNAL_BLOCKED_TOOLSETS = ["memory", "session_search"]
 OPTIONAL_TOOLSETS = {"web", "vision", "image_gen"}              # liberaveis pelo manifesto
 # Nunca habilitaveis em worker (spec 5.5/5.8): tocam disco/shell/rede local do worker.
 FORBIDDEN_TOOLSETS = {"terminal", "file", "code_execution", "browser", "cronjob", "delegation",
@@ -139,7 +142,7 @@ class Paths:
     llm_key_env: str = "OPENAI_API_KEY"
 
 
-def profile_id(tenant: str, template: str, user: str | None) -> str:
+def profile_id(tenant: str, template: str, user: str | None, contact: str | None = None) -> str:
     """Id de perfil CURTO e deterministico. O nome <empresa>__<template>__<usuario> da spec estoura os
     64 chars do Hermes com UUIDs; o triplo fica em .rt-profile.json (e no registro do kernel)."""
     for label, v in (("tenant", tenant), ("template", template)):
@@ -147,6 +150,15 @@ def profile_id(tenant: str, template: str, user: str | None) -> str:
             raise ConfigError(f"{label} invalido: {v!r}")
     if user is not None and not ID_RE.match(user):
         raise ConfigError(f"user invalido: {user!r}")
+    if contact is not None:
+        # contato externo (K-9): um perfil PROPRIO por (empresa, template, contato/conversa); o prefixo 'e-'
+        # nao colide com 'u-' (usuario) nem 's-' (compartilhado). O id do contato entra so no hash.
+        if not contact or len(contact) > 200:
+            raise ConfigError("contato invalido")
+        d = hashlib.sha256(f"{tenant}\x1f{template}\x1fext\x1f{contact}".encode()).hexdigest()[:24]
+        pid = "e-" + d
+        assert PROFILE_ID_RE.match(pid)
+        return pid
     digest = hashlib.sha256(f"{tenant}\x1f{template}\x1f{user or '-'}".encode()).hexdigest()[:24]
     pid = ("u" if user else "s") + "-" + digest   # 'u-' perfil de usuario, 's-' perfil compartilhado do template
     assert PROFILE_ID_RE.match(pid)
@@ -199,7 +211,8 @@ def _validate_manifest(m: Manifest) -> None:
 
 
 def build_config(tenant: str, template: str, user: str | None, manifest: Manifest | dict,
-                 paths: Paths | None = None, template_version: str = "current") -> dict:
+                 paths: Paths | None = None, template_version: str = "current",
+                 external: bool = False) -> dict:
     """Monta o dict do config.yaml do perfil (puro, sem I/O)."""
     paths = paths or Paths()
     m = manifest if isinstance(manifest, Manifest) else Manifest.from_dict(manifest)
@@ -208,17 +221,19 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
 
     ext = system_skill_dirs(paths.system_skills, m.tools, m.environment.enabled)
     ext.append(f"{paths.tenant_skills_root}/{template}/{template_version}")
-    if user:
+    if user and not external:
         ext.append(f"{paths.users_root}/{tenant}/{user}/skills")
     ext = [p.rstrip("/") for p in ext]
 
-    toolsets = list(CORE_TOOLSETS)
+    toolsets = [t for t in CORE_TOOLSETS if not (external and t in EXTERNAL_BLOCKED_TOOLSETS)]
     if m.tools:
         toolsets.append(PLATFORM_TOOLSET)
     toolsets += [t for t in m.toolsets if t not in toolsets]
     if m.environment.enabled:
         toolsets += ENV_TOOLSETS
     disabled = [t for t in ALWAYS_DISABLED]
+    if external:
+        disabled += EXTERNAL_BLOCKED_TOOLSETS
     if not m.environment.enabled:
         disabled += ["terminal", "code_execution", "file"]
 
@@ -242,8 +257,8 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
     if paths.llm_key_cmd:
         cfg["providers"] = {"llm-gw": {"base_url": paths.llm_base_url, "key_cmd": paths.llm_key_cmd}}
 
-    # aprendizado (politica do tenant, spec 3.5)
-    if m.learning == "off":
+    # aprendizado (politica do tenant, spec 3.5); contato externo nunca aprende (K-9)
+    if m.learning == "off" or external:
         cfg["auxiliary"]["background_review"]["enabled"] = False
         cfg["skills"]["creation_nudge_interval"] = 0
         cfg["memory"]["nudge_interval"] = 0
@@ -286,7 +301,7 @@ def _atomic_write(path: Path, data: str, mode: int = 0o644) -> None:
 def write_profile(profiles_root: str | Path, tenant: str, template: str, user: str | None,
                   manifest: Manifest | dict, master_secret: str | bytes, paths: Paths | None = None,
                   template_version: str = "current", uid: int | None = None, gid: int | None = None,
-                  llm_api_key: str = "") -> dict:
+                  llm_api_key: str = "", contact: str | None = None) -> dict:
     """Cria/atualiza o perfil em disco. Devolve {profile_id, api_key, path, changed}.
 
     O perfil "nasce" (3 arquivos pequenos + symlink) na primeira chamada; nas seguintes so reescreve se o
@@ -295,8 +310,11 @@ def write_profile(profiles_root: str | Path, tenant: str, template: str, user: s
     """
     paths = paths or Paths()
     m = manifest if isinstance(manifest, Manifest) else Manifest.from_dict(manifest)
-    pid = profile_id(tenant, template, user)
-    cfg = build_config(tenant, template, user, m, paths, template_version)
+    external = contact is not None
+    if external:
+        user = None  # contato externo nao tem pasta de skills de usuario
+    pid = profile_id(tenant, template, user, contact)
+    cfg = build_config(tenant, template, user, m, paths, template_version, external=external)
     text = config_text(cfg)
     sha = hashlib.sha256(text.encode()).hexdigest()
     key = derive_api_key(master_secret, pid)
@@ -332,7 +350,8 @@ def write_profile(profiles_root: str | Path, tenant: str, template: str, user: s
         # identidade do perfil por ultimo: config.yaml e o marcador que faz o gateway "enxergar" o perfil
         _atomic_write(meta_path, json.dumps({
             "tenant": tenant, "template": template, "user": user, "profile_id": pid,
-            "template_version": template_version, "config_sha256": sha, "contract": 1}, sort_keys=True), 0o644)
+            "template_version": template_version, "config_sha256": sha, "contract": 1,
+            "external": external}, sort_keys=True), 0o644)
         _atomic_write(root / "config.yaml", text, 0o644)
         if uid is not None:
             for p in [root, *root.rglob("*")]:
