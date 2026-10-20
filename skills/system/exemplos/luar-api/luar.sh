@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Operacoes no Luar (Chatwoot). Requer LUAR_URL, LUAR_CTX e LUAR_ACCOUNT_ID no ambiente.
+# Operacoes no Luar. Requer LUAR_URL, LUAR_CTX e LUAR_ACCOUNT_ID no ambiente.
 # Uso: bash luar.sh conversas [status]
 #      bash luar.sh mover_card CARD_ID COLUNA_ID
 #      bash luar.sh nota_privada CONVERSA_ID "texto"

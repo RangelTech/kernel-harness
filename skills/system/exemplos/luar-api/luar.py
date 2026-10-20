@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cliente minimo do Luar (Chatwoot). Requer LUAR_URL, LUAR_CTX e LUAR_ACCOUNT_ID no ambiente."""
+"""Cliente minimo do Luar. Requer LUAR_URL, LUAR_CTX e LUAR_ACCOUNT_ID no ambiente."""
 import os
 
 import requests

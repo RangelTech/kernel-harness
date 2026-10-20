@@ -1,6 +1,6 @@
 ---
 name: exemplo-luar-api
-description: Exemplos de curl e Python para operar o Luar (Chatwoot) por API: listar conversas, mover cards do Kanban, nota privada e etiquetas.
+description: Exemplos de curl e Python para operar o Luar por API: listar conversas, mover cards do Kanban, nota privada e etiquetas.
 ---
 
 # Exemplo: API do Luar
