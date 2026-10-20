@@ -57,9 +57,28 @@ def package_files_note(assets: list[tuple[str, int]], local_dir: str) -> str:
     )
 
 
+def confirm_actions_note(rule) -> str | None:
+    """`limits.confirm_actions` em lista: avisa o modelo dos tipos que pedem cartão antes."""
+    if not isinstance(rule, list):
+        return None
+    kinds = [str(k) for k in rule if str(k).strip()]
+    if not kinds:
+        return None
+    return (
+        "## Confirmação exigida pelo template\n"
+        "Antes de fazer qualquer uma destas ações, chame `rt_confirm` (`topic` = o tipo, `summary` "
+        "= o que vai acontecer) e espere a aprovação no cartão: "
+        + ", ".join(f"`{k}`" for k in kinds)
+        + ". Se o usuário negar, não faça a ação."
+    )
+
+
 def build_instructions(agent_md: str, recall: list[dict], catalog: list[dict],
-                       redactor: Redactor, package_files: str | None = None) -> str:
+                       redactor: Redactor, package_files: str | None = None,
+                       confirm_note: str | None = None) -> str:
     parts = [agent_md.strip() or "Você é um assistente corporativo objetivo e cordial.", BASE_RULES]
+    if confirm_note:
+        parts.append(confirm_note)
     if package_files:
         parts.append(package_files)
     if recall:
@@ -184,7 +203,8 @@ class Dispatcher:
                 self.profiles.read_agent_md(tenant_dir, pkg),
                 (body.get("memory") or {}).get("recall") or [],
                 body.get("credentials_catalog") or [], ctx.redactor,
-                package_files_note(assets, f"{tenant_dir}/arquivos") if assets else None)
+                package_files_note(assets, f"{tenant_dir}/arquivos") if assets else None,
+                confirm_actions_note(ctx.limits.get("confirm_actions")))
             hbody = {"input": render_input(body), "instructions": instructions,
                      "session_id": ctx.session_id}
             if body.get("history"):
@@ -260,14 +280,15 @@ class Dispatcher:
         gen = hermes.resilient_events(profile, hid)
         cancel_wait = asyncio.ensure_future(ctx.cancelled.wait())
         nxt: asyncio.Future | None = None
-        start_eff = last_eff = ctx.effective_now()
+        start_eff = ctx.effective_now()
+        last_eff = ctx.silence_now()
         steered = False
         try:
             while True:
                 if nxt is None:
                     nxt = asyncio.ensure_future(gen.__anext__())
                 eff = ctx.effective_now()
-                silence_left = silence - (eff - last_eff)
+                silence_left = silence - (ctx.silence_now() - last_eff)
                 turn_left = turn - (eff - start_eff)
                 if silence_left <= 0 or turn_left <= 0:
                     log.warning("timeout run=%s (%s)", ctx.run_id,
@@ -288,7 +309,7 @@ class Dispatcher:
                     return "interrupted"  # stream acabou sem evento terminal
                 finally:
                     nxt = None
-                last_eff = ctx.effective_now()
+                last_eff = ctx.silence_now()
                 sig = tr.translate(ev)
                 for etype, data in sig.events:
                     if etype == "artifact":
