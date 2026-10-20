@@ -227,3 +227,10 @@ def test_tarefa_longa_bash(tmp_path: Path):
         time.sleep(0.1)
     r = subprocess.run([BASH, str(d / "acompanhar.sh"), "t1"], env=env, capture_output=True, text=True)
     assert r.stdout.splitlines()[0] == "concluida" and "pronto" in r.stdout
+
+
+@pytest.mark.parametrize("arquivo", [a for a in ARQUIVOS if a.parent.name == "luar-api"], ids=rel)
+def test_luar_api_nao_expoe_nome_interno(arquivo):
+    """O agente e o cliente leem estes textos: o produto se chama Luar, nunca Chatwoot."""
+    texto = arquivo.read_text(encoding="utf-8").lower()
+    assert not [t for t in ("chatwoot", "ratende", "captain", "ninerouter") if t in texto]
