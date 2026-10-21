@@ -15,3 +15,7 @@ description: Gerar gráficos, tabelas e relatórios (imagem, planilha, PDF) a pa
 - Moeda em R$ com separador brasileiro; datas `dd/mm/aaaa`.
 - Mostre os números-chave também em texto (acessibilidade).
 - Se faltarem dados para o período pedido, diga qual período foi possível.
+
+## Planilhas .xlsx (openpyxl)
+- Nomes de função nas fórmulas SEMPRE em inglês (`SUM`, `SUMIF`, `IF`, `VLOOKUP`), mesmo com o usuário falando português: o arquivo guarda o nome em inglês e o Excel traduz ao abrir. `SOMA`/`SOMASE` gravados pelo openpyxl dão `#NAME?`. Separador de argumentos é vírgula.
+- O openpyxl não calcula: confira os totais em Python (pandas) e cite-os na resposta.
