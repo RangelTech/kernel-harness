@@ -56,17 +56,20 @@ def parse_facts(text: str) -> list[str]:
 
 
 async def extract(settings: Settings, http: httpx.AsyncClient, *, messages: list[dict],
-                  existing: list[str], model: str, secrets: list[str]) -> list[str]:
+                  existing: list[str], model: str, secrets: list[str],
+                  gateway: dict | None = None) -> list[str]:
     window = [{"role": m.get("role", "user"), "content": str(m.get("content", ""))[:MAX_CHARS]}
               for m in messages if m.get("role") in ("user", "assistant")][-MAX_MESSAGES:]
     if not any(m["role"] == "user" for m in window):
         return []
     convo = "\n".join(f"{m['role']}: {m['content']}" for m in window)
+    gw = gateway or {}
+    base = str(gw.get("base_url") or "").rstrip("/") or f"{settings.litellm_url}/v1"
+    key = str(gw.get("api_key") or "") or settings.litellm_key
     try:
         r = await http.post(
-            f"{settings.litellm_url}/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.litellm_key}"} if settings.litellm_key
-            else {},
+            f"{base}/chat/completions",
+            headers={"Authorization": f"Bearer {key}"} if key else {},
             json={"model": model or "agente-padrao", "temperature": 0,
                   "messages": [{"role": "system", "content": PROMPT},
                                {"role": "user", "content": convo}]}, timeout=60.0)

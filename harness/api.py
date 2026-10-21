@@ -275,7 +275,8 @@ async def memories_extract(request: Request):
         k.s, k.http, messages=[m for m in msgs if isinstance(m, dict)],
         existing=[str(x) for x in body.get("existing") or []],
         model=str((body.get("model") or {}).get("alias") or ""),
-        secrets=[str(x) for x in body.get("secret_values") or []])
+        secrets=[str(x) for x in body.get("secret_values") or []],
+        gateway=(body.get("model") or {}).get("gateway"))
     return {"facts": facts}
 
 
