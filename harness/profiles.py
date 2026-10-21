@@ -107,13 +107,17 @@ class RealProfileGenerator:
         m = dict(manifest or {})
         if model and model.get("alias") and not m.get("model_alias"):
             m["model_alias"] = model["alias"]
+        # G-9: o motor manda `model.gateway` (base_url unica + chave restrita ao combo); sem isso, env legado
+        gw = (model or {}).get("gateway") or {}
+        llm_base_url = str(gw.get("base_url") or "").rstrip("/") or f"{self.s.litellm_url}/v1"
+        llm_key = str(gw.get("api_key") or "") or self.s.llm_worker_key
         paths = pc.Paths(system_skills=self.s.worker_system_skills_dir,
                          tenant_skills_root=self.s.tenant_skills_root,
                          users_root=self.s.users_root, plugin_src=self.s.plugin_src,
-                         llm_base_url=f"{self.s.litellm_url}/v1")
+                         llm_base_url=llm_base_url)
         r = pc.write_profile(self.s.profiles_root, tenant_id, template_id, user_id, m,
                              self.s.hermes_master_secret, paths, template_version="current",
-                             llm_api_key=self.s.llm_worker_key, contact=contact)
+                             llm_api_key=llm_key, contact=contact)
         return {"home": r["path"], "config_hash": template_hash}
 
 
