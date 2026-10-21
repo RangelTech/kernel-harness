@@ -216,6 +216,44 @@ async def test_teto_da_run_mata_filho_sem_evento_terminal(profiles):
         await front.stop()
 
 
+class StubbornSpawner(FakeSpawner):
+    """Filho que ignora SIGTERM (equivalente a um `kill -9` necessario em voo, K-10)."""
+
+    def kill(self, pid: int, sig: int) -> None:
+        self.killed.append((pid, sig))
+        if sig == signal.SIGKILL:
+            self.alive_pids.discard(pid)
+            runner = self.servers.pop(pid, None)
+            if runner is not None:
+                asyncio.get_running_loop().create_task(runner.cleanup())
+        # SIGTERM: fica "preso" (nao sai de alive_pids) ate o front escalar para SIGKILL
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGKILL"),
+                    reason="SIGKILL so existe em POSIX; rt_worker roda em container Linux")
+async def test_processo_preso_recebe_sigkill_apos_kill_after_s(profiles):
+    sp = StubbornSpawner(run_delay=30)
+    front, client, runner = await make(profiles, sp, slots=2, run_max_s=0.1)
+    try:
+        await client.post(f"{BASE}/p/u-aaa/v1/runs", json={"input": "x"}, headers=H)
+        await asyncio.sleep(0.3)
+        front.sweep()  # passou do teto da run: manda SIGTERM
+        assert sp.killed == [(1001, signal.SIGTERM)]
+        assert front.active == 1  # filho preso ainda ocupa o slot
+        await asyncio.sleep(0.1)
+        front.sweep()  # ainda dentro do kill_after_s: nao escala
+        assert sp.killed == [(1001, signal.SIGTERM)]
+        await asyncio.sleep(0.2)
+        front.sweep()  # kill_after_s esgotado e o filho continua vivo: escala para SIGKILL
+        assert sp.killed == [(1001, signal.SIGTERM), (1001, signal.SIGKILL)]
+        front.sweep()  # agora morreu: libera slot e porta
+        assert front.active == 0 and not front.runs
+    finally:
+        await client.close()
+        await runner.cleanup()
+        await front.stop()
+
+
 def test_health_e_lista_de_modulos_quentes():
     from rt_worker.zygote import warm_module_names
     names = warm_module_names()
