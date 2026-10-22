@@ -238,8 +238,9 @@ class Dispatcher:
             await self.store.set_run(run_id, status="starting", worker_id=grant.worker.id,
                                      start_ts=time.time())
             # 1o evento imediato (feedback ao usuario antes do boot do worker e do modelo)
-            await self.bus.publish(run_id, "step", {
-                "kind": "queue", "label": "Iniciando", "status": "done"}, ctx)
+            if not q.attempts:  # repeticao por 429 nao repete o aviso
+                await self.bus.publish(run_id, "step", {
+                    "kind": "queue", "label": "Iniciando", "status": "done"}, ctx)
             run = await self.store.get_run(run_id) or {}
             if run.get("cancel") == "1":
                 ctx.cancelled.set()

@@ -417,3 +417,10 @@ def test_classifiers_detect_gateway_statuses_and_ignore_noise():
     assert is_model_unavailable("HTTP 502: bad gateway")
     assert not is_model_unavailable("falha simulada")
     assert not is_model_unavailable("leu 5001 linhas")
+
+
+async def test_iniciando_is_published_once_even_with_model_retries(make_rig):
+    rig = await make_rig(1, model_retry_delay_s=0.05)
+    ev = await rig.send(rig.body(run_id="ini1", message="[[fail429:99]][[say:x]]"))
+    starts = [e for e in ev if e.type == "step" and e.data.get("label") == "Iniciando"]
+    assert len(starts) == 1
