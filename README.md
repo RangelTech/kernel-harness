@@ -1,50 +1,77 @@
-# kernel-harness
+# luar_harness
 
-Kernel de IA do RAgent: roda o **Hermes Agent** (NousResearch, projeto externo) num runtime isolado por tenant e expõe ao backend (`agent-platform`) uma API interna com eventos SSE e estados terminais. **Convive com o `kernel-llm`** (LangGraph): o backend escolhe o kernel pelo tipo do template (spec 04, D-50).
+Executa os agentes por skills. Recebe uma run do motor, coloca na fila, entrega a um worker Hermes isolado por empresa e devolve eventos em tempo real (SSE) até um estado final. O Hermes Agent (NousResearch, MIT) entra como imagem fixada, não como cópia.
 
-> Estado: **núcleo implementado** (spec 04, WP-E): API FastAPI, fila Redis Streams + dispatchers, tradução de eventos, broker `rt_*`, promotor de skills, `/compress`, recuperação de runs. Testes offline com Hermes falso. Relatório do pacote: `specs/anexos/04/exec/WP-E_kernel.md` (repo de specs).
+> Nome anterior: `kernel-harness`.
 
-## O que este repo é (e não é)
-| É | Não é |
-|---|---|
-| adaptador Hermes, gerenciador de runtimes por tenant, executor de ferramentas, broker de credenciais, contrato Backend→Kernel | backend/frontend (isso é o `agent-platform`), infraestrutura da VPS (isso é o `vps_rt_infra`), um fork do Hermes |
+## Onde ele se encaixa
 
-## Mapa
 ```
-harness/    serviço do kernel (API interna, adaptador Hermes)         -> imagem ghcr.io/rangeltech/kernel-harness/harness
-runtime/    gerenciador de runtimes por tenant (Hermes por tenant)    (spec 04)
-executor/   ferramentas/jobs isolados                                 (spec 04)
-broker/     ferramentas rt_*: credenciais so em memoria da run, SQL/Pix/e-mail/HTTP guardados
-devtools/   Hermes FALSO, backend FALSO e externos falsos (so teste/dev; alvo `dev` do Dockerfile)
-dev/        compose.harness.yml (Redis + kernel + 2 Hermes falsos + backend falso) e smoke.py
-tests/      pytest offline: C (contrato), B (broker), P (fila/pool), S (skills)
-contracts/  contrato Backend->Kernel e eventos (versionados)
+                    Cliente (navegador e canais)
+                                |
+                        Traefik (VPS)
+                                |
+ luar_chatwoot --contexto assinado--> luar_engine --runs--> luar_harness
+ (telas, inbox, Kanban,               (motor de IA:         (fila, broker,
+  bridge, gateway de canais)           templates, skills,    workers Hermes)
+                                       credenciais, uso)            |
+                                            |                luar_workspaces
+                                       luar_ai_gateway       (ambiente de cada
+                                       (LLM multi-tenant)     empresa)
+
+ vps_rt_infra: compose, releases por digest, deploy e backup (só ela implanta)
+ airflow:      orquestração da empresa, inclui o backup noturno da VPS
+ luar_docs:    specs, evidências e ADRs
+```
+
+## Árvore de pastas
+
+```
+harness/    API interna, fila (Redis Streams), dispatcher, tradução de eventos, recuperação de runs
+broker/     ferramentas rt_*: credenciais só na memória da run; SQL, Pix, e-mail e HTTP protegidos
+runtime/    gerenciador de runtimes por empresa
+executor/   ferramentas e jobs isolados
 skills/     skills oficiais de sistema (SKILL.md)
-docker/     Dockerfiles
-scripts/    verify.sh (gate local)
-docs/       adr/, runbooks/ (OPERACAO_KERNEL.md), qa/, provenance.md, ONBOARDING_SERVICO.md, GUIA_ESCREVER_AGENTE_POR_SKILLS.md
+contracts/  contrato Motor -> Harness e eventos, versionados
+plugin/     plugin do broker e imagem do Hermes
+dev/        pilha local com Hermes e backend falsos, e smoke.py
+tests/      pytest offline (contrato, broker, fila, skills)
+docs/       ADRs, runbooks e guia para escrever agente por skills
 ```
 
-## Regras de entrega (valem para todo repo da Rangel Tech)
-1. **Este repo produz e publica artefatos; ele nunca faz deploy.** Só o repo `RangelTech/vps_rt_infra` tem as credenciais da VPS e implanta.
-2. Todo release publica a imagem **por digest** (`ghcr.io/rangeltech/kernel-harness/harness@sha256:...`) e um `release-manifest.json` como asset da GitHub Release. O `vps_rt_infra` lê o manifesto, fixa o digest em `releases/kernel-harness.lock` e faz o deploy.
-3. **Gate local obrigatório** antes de publicar: `scripts/verify.sh` (sobe a mesma imagem em Docker e roda o smoke). O CI repete o mesmo comando.
-4. **Repo público:** nada de segredo, `.env`, dado de cliente ou IP/credencial de produção entra aqui. `gitleaks` roda em todo PR.
+## Como rodar
 
-## Desenvolvimento local
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q          # suites C, B, P, S, 100% offline (fakeredis + Hermes falso)
-scripts/verify.sh            # build + smoke (precisa de Docker)
-docker compose -f dev/compose.harness.yml up --build   # pilha completa com fakes
-python dev/smoke.py "ola"    # envia uma run e imprime o SSE
+docker compose -f dev/compose.harness.yml up --build
+python dev/smoke.py "ola"
 curl localhost:8080/health
 ```
 
-## Release
-```bash
-git tag v0.1.0 && git push origin v0.1.0     # dispara .github/workflows/release.yml
-```
+## Como testar
 
-## Licenças e atribuição
-O Hermes Agent é MIT (NousResearch) e é consumido por imagem fixada, não copiado.
+`python -m pytest -q` (100% offline) e `scripts/verify.sh` (build e smoke em Docker, repetido no CI).
+
+## Como implantar
+
+Uma tag `v*` publica a imagem por digest e o manifesto. Só o `vps_rt_infra` implanta. Antes de trocar o worker em produção, drene as runs em andamento (regra K-10).
+
+## Contratos e segurança
+
+- O contrato fica em `contracts/v1/`; mudança de campo é versionada.
+- Credenciais existem só na memória da run: nunca em log, evento ou disco.
+- Cada empresa tem seu ambiente e seus limites; o broker nega por padrão.
+
+## Runbooks e decisões
+
+- [`docs/runbooks/OPERACAO_KERNEL.md`](docs/runbooks/OPERACAO_KERNEL.md): operar o kernel, drenar, recuperar runs e ler os sinais de saúde.
+- [`docs/adr/ADR-001-fronteiras.md`](docs/adr/ADR-001-fronteiras.md) e [`ADR-002-entrega-por-artefato.md`](docs/adr/ADR-002-entrega-por-artefato.md).
+- [`docs/ONBOARDING_SERVICO.md`](docs/ONBOARDING_SERVICO.md) e [`docs/GUIA_ESCREVER_AGENTE_POR_SKILLS.md`](docs/GUIA_ESCREVER_AGENTE_POR_SKILLS.md).
+
+## Variáveis de ambiente
+
+Só nomes. Principais: `HERMES_IMAGE` (imagem fixada do Hermes), `GIT_COMMIT` (versão no `/health`). O restante é lido de `harness/config` e documentado em `docs/ONBOARDING_SERVICO.md`. Valores nunca entram no repositório.
+
+## Como contribuir
+
+Uma branch por tarefa, Conventional Commits em português, CI verde. Leia `docs/adr/` antes de mexer em fronteiras.
