@@ -62,6 +62,16 @@ Uma tag `v*` publica a imagem por digest e o manifesto. Só o `vps_rt_infra` imp
 - Credenciais existem só na memória da run: nunca em log, evento ou disco.
 - Cada empresa tem seu ambiente e seus limites; o broker nega por padrão.
 
+## Runbooks e decisões
+
+- [`docs/runbooks/OPERACAO_KERNEL.md`](docs/runbooks/OPERACAO_KERNEL.md): operar o kernel, drenar, recuperar runs e ler os sinais de saúde.
+- [`docs/adr/ADR-001-fronteiras.md`](docs/adr/ADR-001-fronteiras.md) e [`ADR-002-entrega-por-artefato.md`](docs/adr/ADR-002-entrega-por-artefato.md).
+- [`docs/ONBOARDING_SERVICO.md`](docs/ONBOARDING_SERVICO.md) e [`docs/GUIA_ESCREVER_AGENTE_POR_SKILLS.md`](docs/GUIA_ESCREVER_AGENTE_POR_SKILLS.md).
+
+## Variáveis de ambiente
+
+Só nomes. Principais: `HERMES_IMAGE` (imagem fixada do Hermes), `GIT_COMMIT` (versão no `/health`). O restante é lido de `harness/config` e documentado em `docs/ONBOARDING_SERVICO.md`. Valores nunca entram no repositório.
+
 ## Como contribuir
 
 Uma branch por tarefa, Conventional Commits em português, CI verde. Leia `docs/adr/` antes de mexer em fronteiras.
