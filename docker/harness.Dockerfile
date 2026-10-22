@@ -9,7 +9,7 @@ COPY contracts ./contracts
 COPY skills ./skills
 COPY profiles ./profiles
 ARG GIT_COMMIT=unknown
-ARG SOURCE_URL=https://github.com/RangelTech/kernel-harness
+ARG SOURCE_URL=https://github.com/RangelTech/luar_harness
 ENV GIT_COMMIT=${GIT_COMMIT} PORT=8080 SYSTEM_SKILLS_DIR=/srv/skills/system
 LABEL org.opencontainers.image.source=${SOURCE_URL} \
       org.opencontainers.image.revision=${GIT_COMMIT} \

@@ -41,7 +41,7 @@ ENV API_SERVER_ENABLED=true \
     RT_WORKER_RUN_MAX_S=3600
 
 LABEL org.opencontainers.image.description="rt-hermes: Hermes Agent headless + plugin rt-broker (kernel-harness)" \
-      org.opencontainers.image.source="https://github.com/RangelTech/kernel-harness" \
+      org.opencontainers.image.source="https://github.com/RangelTech/luar_harness" \
       rt.hermes.base_digest="${HERMES_DIGEST}"
 
 EXPOSE 8642

@@ -46,7 +46,7 @@ jobs:
                   for c in iter(lambda: f.read(1 << 20), b""):
                       h.update(c)
               return h.hexdigest()
-          common = {"schema": 1, "repo": "RangelTech/kernel-harness", "commit": os.environ["GITHUB_SHA"][:7], "version": v,
+          common = {"schema": 1, "repo": "RangelTech/luar_harness", "commit": os.environ["GITHUB_SHA"][:7], "version": v,
                     "built_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
           svcs = {
             "kernel-harness": {"img": "kernel-harness.image.tar.gz", "tag": "kernel-harness/harness:" + v,
