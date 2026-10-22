@@ -48,3 +48,11 @@ def test_report_has_first_work_percentiles_and_body_carries_tenant_package_files
     assert result["first_work_s"]["p95"] == 4.1
     body = build_body(settings(), tenant_id="qa-0", index=0)
     assert body["skills"]["tenant_package"]["files"][0]["path"] == "AGENTE.md"
+
+
+def test_body_can_point_the_run_to_a_fake_gateway():
+    s = Settings("http://kernel.test", "service", "secret", "tpl", "v1", "model", "oi", 60,
+                 gateway_url="http://fake:9999/v1")
+    body = build_body(s, tenant_id="qa-0", index=0)
+    assert body["model"]["gateway"]["base_url"] == "http://fake:9999/v1"
+    assert "gateway" not in build_body(settings(), tenant_id="qa-0", index=0)["model"]

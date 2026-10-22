@@ -49,6 +49,7 @@ class Settings:
     timeout_s: float
     tools: tuple[str, ...] = ()
     environment: bool = False
+    gateway_url: str = ""  # QA: aponta a run para um gateway falso (prova de 429/503 sem tocar no real)
 
     @classmethod
     def from_env(cls, timeout_s: float) -> Settings:
@@ -67,6 +68,7 @@ class Settings:
             timeout_s=timeout_s,
             tools=tuple(t for t in os.environ.get("HARNESS_QA_TOOLS", "").split(",") if t),
             environment=os.environ.get("HARNESS_QA_ENV") == "1",
+            gateway_url=os.environ.get("HARNESS_QA_GATEWAY_URL", ""),
         )
 
 
@@ -95,6 +97,9 @@ def build_body(settings: Settings, *, tenant_id: str, index: int) -> dict[str, A
         "credentials_catalog": [],
         "memory": {"recall": []},
     }
+    if settings.gateway_url:
+        body["model"]["gateway"] = {"base_url": settings.gateway_url,
+                                    "api_key": os.environ.get("HARNESS_QA_GATEWAY_KEY", "qa-fake")}
     body["run_token"] = sign_backend_run_token(
         {"run_id": run_id, "tenant_id": tenant_id, "user_id": user_id, "exp": time.time() + settings.timeout_s + 120},
         settings.run_token_secret,
