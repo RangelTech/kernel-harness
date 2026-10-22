@@ -80,9 +80,9 @@ class RunContext:
     # ---- manifesto
     @property
     def tools_allowed(self) -> set[str]:
-        from broker.catalog import expand_tools
+        from broker.catalog import environment_enabled, expand_tools
 
-        return set(expand_tools(self.manifest.get("tools")))
+        return set(expand_tools(self.manifest.get("tools"), environment_enabled(self.manifest)))
 
     @property
     def limits(self) -> dict:

@@ -148,9 +148,10 @@ O Redis central roda com `appendonly yes`, `maxmemory 2gb` e `noeviction`. Se o 
 
 O que o kernel já faz sozinho:
 
-1. **429 do provedor de modelo antes de qualquer ação** (nenhuma ferramenta chamada na run): a run volta para a fila na ordem de chegada, com o passo "Aguardando o modelo liberar". Espera crescente com jitter: `HARNESS_MODEL_RETRY_S` (8 s) x (tentativa + 1), até **4 tentativas**.
+1. **429/503/529 do provedor de modelo antes de qualquer ação** (nenhuma ferramenta chamada na run): a run volta para a fila na ordem de chegada, com o passo "Aguardando o modelo liberar". Espera crescente com jitter: `HARNESS_MODEL_RETRY_S` (8 s) x (tentativa + 1), no máximo 20 s por espera, até **2 repetições** (3 tentativas). O worker Hermes não repete o 429 por conta própria (`api_max_retries=1`, `auto_recovery_cycles=0`): antes ele dormia o `Retry-After` do gateway (até 10 min) em silêncio e a run morria no silêncio de 120 s com "demorou mais que o esperado".
 2. **429 do worker** (limite de concorrência do próprio Hermes): a run volta para a fila em 0,5 s.
-3. **Depois que alguma ferramenta já rodou**, o kernel **não** repete (evita cobrança ou e-mail duplicado). A run termina com erro `rate_limited` ("O serviço de IA está com muitas solicitações agora...") e **nunca** como sucesso.
+3. **Depois que alguma ferramenta já rodou**, o kernel **não** repete (evita cobrança ou e-mail duplicado). A run termina com erro `model_rate_limited` ("O modelo está ocupado ou o limite de uso foi atingido. Tente novamente em instantes.") e **nunca** como sucesso.
+3b. Credencial recusada ou gateway fora (401/403/5xx): erro `model_unavailable` ("O modelo de IA está indisponível no momento..."), sem repetir.
 4. Fila cheia: a API devolve 429 `backpressure` (`Retry-After: 5`) para o backend.
 
 O que fazer quando o 429 persiste:
@@ -162,7 +163,7 @@ O que fazer quando o 429 persiste:
 
 ### 3.6 Run presa
 
-Sintoma: usuário vê "Na fila" ou a conversa não termina. Antes de mexer, entenda que existem tetos automáticos: silêncio de 120 s e turno de 540 s (`HARNESS_SILENCE_TIMEOUT_S`, `HARNESS_TURN_TIMEOUT_S`), confirmação de 120 s (`HARNESS_APPROVAL_TIMEOUT_S`; enquanto espera, os tetos pausam) e fila de 60 s (fixo). Espere esses prazos antes de agir.
+Sintoma: usuário vê "Na fila" ou a conversa não termina. Antes de mexer, entenda que existem tetos automáticos: silêncio de 120 s e turno de 1800 s (`HARNESS_SILENCE_TIMEOUT_S`, `HARNESS_TURN_TIMEOUT_S`), confirmação de 120 s (`HARNESS_APPROVAL_TIMEOUT_S`; enquanto espera, os tetos pausam) e fila de 60 s (fixo). Espere esses prazos antes de agir.
 
 Diagnóstico:
 

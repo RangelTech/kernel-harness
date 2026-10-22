@@ -9,10 +9,19 @@ GROUPS: dict[str, tuple[str, ...]] = {
 }
 
 
-def expand_tools(tools) -> list[str]:
-    """Ids do manifesto (capacidades ou ferramentas) -> nomes de ferramenta do broker, sem repetir."""
+def environment_enabled(manifest) -> bool:
+    """`manifest.environment` vem como {"enabled": bool, ...} (ou bool solto, legado)."""
+    env = (manifest or {}).get("environment")
+    return bool(env.get("enabled")) if isinstance(env, dict) else bool(env)
+
+
+def expand_tools(tools, env_enabled: bool = False) -> list[str]:
+    """Ids do manifesto (capacidades ou ferramentas) -> nomes de ferramenta do broker, sem repetir.
+
+    `env_enabled` (ambiente ligado no manifesto) acrescenta as ferramentas rt_env_* do runtime-manager."""
     out: list[str] = []
-    for t in ["rt_confirm", *(tools or [])]:  # confirmar e sempre possivel: a regra e do template
+    extra = ["rt_env_status", "rt_env_manage"] if env_enabled else []
+    for t in ["rt_confirm", *(tools or []), *extra]:  # confirmar e sempre possivel: a regra e do template
         for name in GROUPS.get(t, (t,)):
             if name not in out:
                 out.append(name)

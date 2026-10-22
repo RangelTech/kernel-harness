@@ -209,7 +209,7 @@ async def exec_(svc, ctx: RunContext, args: dict):
     if not command.strip():
         raise ToolError("invalid_args", "Informe o comando.")
     try:
-        timeout = max(1, min(int(args.get("timeout_s") or 60), 600))
+        timeout = max(1, min(int(args.get("timeout_s") or 60), 1500))
     except (TypeError, ValueError):
         timeout = 60
     rmt = rm_tenant(ctx.tenant_id)

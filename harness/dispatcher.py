@@ -5,6 +5,7 @@ import asyncio
 import copy
 import logging
 import random
+import re
 import time
 from pathlib import Path
 
@@ -147,12 +148,34 @@ def render_input(body: dict) -> str:
     return text
 
 
-MAX_MODEL_RETRIES = 4
+MAX_MODEL_RETRIES = 2
+MODEL_RETRY_MAX_WAIT_S = 20.0  # espera maxima por tentativa: o usuario recebe a resposta amigavel em ~1 min
+
+_BUSY_STATUS = re.compile(r"(?:http|status(?: code)?|error code:?)\s*(?:429|503|529)(?!\d)")
+_BUSY_WORDS = ("rate limit", "ratelimit", "rate_limit", "too many requests", "overloaded",
+               "service unavailable", "quota", "resource_exhausted", "at capacity", "usage limit")
+_AUTH_STATUS = re.compile(r"(?:http|status(?: code)?|error code:?)\s*(?:401|403)(?!\d)")
+_AUTH_WORDS = ("authentication", "unauthorized", "revoked", "model not found", "no available")
+_TRANSIENT_STATUS = re.compile(r"(?:http|status(?: code)?|error code:?)\s*(?:500|502|504)(?!\d)")
+_TRANSIENT_WORDS = ("bad gateway", "gateway timeout", "connection error", "timed out")
 
 
 def is_rate_limited(error: str | None) -> bool:
+    """429/503/529 do gateway de modelos (ou texto equivalente): o modelo esta ocupado ou sem cota."""
     e = (error or "").lower()
-    return "429" in e or "rate limit" in e or "ratelimit" in e or "rate_limit" in e
+    return bool(_BUSY_STATUS.search(e)) or any(w in e for w in _BUSY_WORDS)
+
+
+def is_model_transient(error: str | None) -> bool:
+    """502/504/queda de conexao: costuma passar em segundos, entra na mesma repeticao do 429."""
+    e = (error or "").lower()
+    return bool(_TRANSIENT_STATUS.search(e)) or any(w in e for w in _TRANSIENT_WORDS)
+
+
+def is_model_unavailable(error: str | None) -> bool:
+    """Modelo fora do ar para esta run: credencial recusada (401/403) ou gateway com falha."""
+    e = (error or "").lower()
+    return bool(_AUTH_STATUS.search(e)) or any(w in e for w in _AUTH_WORDS) or is_model_transient(e)
 
 
 class Dispatcher:
@@ -214,9 +237,9 @@ class Dispatcher:
         try:
             await self.store.set_run(run_id, status="starting", worker_id=grant.worker.id,
                                      start_ts=time.time())
-            if q.last_position:
-                await self.bus.publish(run_id, "step", {
-                    "kind": "queue", "label": "Iniciando", "status": "done"}, ctx)
+            # 1o evento imediato (feedback ao usuario antes do boot do worker e do modelo)
+            await self.bus.publish(run_id, "step", {
+                "kind": "queue", "label": "Iniciando", "status": "done"}, ctx)
             run = await self.store.get_run(run_id) or {}
             if run.get("cancel") == "1":
                 ctx.cancelled.set()
@@ -225,6 +248,7 @@ class Dispatcher:
                 terminal_done = True
                 return
 
+            t_exec = time.monotonic()
             pkg = (body.get("skills") or {}).get("tenant_package")
             profile, tenant_dir = await self.profiles.ensure(
                 tenant_id=ctx.tenant_id, template_id=ctx.template_id, user_id=ctx.user_id,
@@ -254,14 +278,18 @@ class Dispatcher:
             if actor.get("name"):
                 hbody["author"] = {"name": actor["name"], "role": actor.get("role", "")}
 
+            t_prep = time.monotonic()
             hid = await hermes.start_run(
                 profile, hbody, idempotency_key=run_id if not q.attempts else f"{run_id}:{q.attempts}",
                 session_key=f"user:{ctx.user_id}" if ctx.user_id else f"chat:{ctx.chat_id}")
+            log.info("run=%s prep_ms=%d start_ms=%d worker=%s", run_id, (t_prep - t_exec) * 1000,
+                     (time.monotonic() - t_prep) * 1000, grant.worker.id)
             await self.store.set_run(run_id, status="running", hermes_run_id=hid, profile=profile)
 
             result = await self._consume(ctx, hermes, profile, hid)
             if (not isinstance(result, str) and result.kind == "failed"
-                    and is_rate_limited(result.error) and ctx.tool_calls == 0
+                    and (is_rate_limited(result.error) or is_model_transient(result.error))
+                    and ctx.tool_calls == 0
                     and q.attempts < MAX_MODEL_RETRIES):
                 # 429 do provedor de modelo antes de qualquer acao: sem efeito colateral, tenta de novo
                 log.warning("modelo em rate limit run=%s tentativa=%s", run_id, q.attempts + 1)
@@ -269,8 +297,10 @@ class Dispatcher:
                 await self.bus.publish(run_id, "step", {
                     "kind": "queue", "label": "Aguardando o modelo liberar", "status": "start"}, ctx)
                 # espera crescente + jitter: nao martela o provedor que acabou de recusar
-                raise Requeue(self.s.model_retry_delay_s * (q.attempts + 1) * random.uniform(0.8, 1.3),
-                              "rate limit do modelo")
+                wait = min(self.s.model_retry_delay_s * (q.attempts + 1) * random.uniform(0.8, 1.3),
+                           MODEL_RETRY_MAX_WAIT_S)
+                # o scheduler multiplica por min(tentativas, 5): entrega a espera absoluta calculada acima
+                raise Requeue(wait / min(q.attempts + 1, 5), "rate limit do modelo")
             terminal_done = True
             await self._finish(ctx, hermes, profile, hid, result)
         except Requeue:
@@ -433,7 +463,9 @@ class Dispatcher:
             if result.error:
                 log.warning("hermes run falhou run=%s: %s", run_id, ctx.redactor.scrub(result.error))
             if result.kind == "failed" and is_rate_limited(result.error):
-                code = "rate_limited"
+                code = "model_rate_limited"
+            elif result.kind == "failed" and is_model_unavailable(result.error):
+                code = "model_unavailable"
             status = {"failed": "failed", "cancelled": "cancelled",
                       "interrupted": "interrupted", "partial": "interrupted"}[result.kind]
             await self._terminal_error(ctx, code, status)

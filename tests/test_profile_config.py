@@ -49,3 +49,44 @@ def test_model_uses_key_env_and_profile_env_holds_the_key(tmp_path: Path):
     pc.write_profile(tmp_path, "t1", "tpl", "u1", {"tools": []}, "m" * 32, pc.Paths(),
                      llm_api_key="sk-virtual-xyz")
     assert "OPENAI_API_KEY=sk-virtual-xyz" in (root / ".env").read_text(encoding="utf-8")
+
+
+def test_environment_enabled_without_ssh_uses_runtime_manager_not_terminal():
+    cfg = pc.build_config("t1", "tpl", "u1", {"tools": [], "environment": {"enabled": True}},
+                          pc.Paths(system_skills="/skills/system"))
+    assert "/skills/system/ambiente" in _ext(cfg)
+    ts = cfg["platform_toolsets"]["api_server"]
+    assert "terminal" not in ts and "file" not in ts
+    assert {"terminal", "code_execution", "file"} <= set(cfg["agent"]["disabled_toolsets"])
+    assert cfg["terminal"]["ssh_host"] == pc.NO_ENV_SSH_HOST
+
+
+def test_ssh_environment_half_configured_is_rejected():
+    import pytest
+    with pytest.raises(pc.ConfigError):
+        pc.build_config("t1", "tpl", "u1",
+                        {"tools": [], "environment": {"enabled": True, "ssh_host": "h"}},
+                        pc.Paths())
+
+
+def test_manifest_toolsets_reach_the_profile_and_forbidden_ones_are_refused():
+    import pytest
+    cfg = pc.build_config("t1", "tpl", "u1", {"tools": [], "toolsets": ["web"]}, pc.Paths())
+    assert "web" in cfg["platform_toolsets"]["api_server"]
+    with pytest.raises(pc.ConfigError):
+        pc.build_config("t1", "tpl", "u1", {"tools": [], "toolsets": ["terminal"]}, pc.Paths())
+
+
+def test_model_failures_surface_fast_to_the_kernel():
+    cfg = pc.build_config("t1", "tpl", "u1", {"tools": []}, pc.Paths())
+    assert cfg["agent"]["api_max_retries"] == 1
+    assert cfg["agent"]["auto_recovery_cycles"] == 0
+
+
+def test_expand_tools_adds_env_tools_when_environment_is_on():
+    from broker.catalog import environment_enabled, expand_tools
+    assert "rt_env_exec" not in expand_tools([])
+    on = expand_tools([], environment_enabled({"environment": {"enabled": True}}))
+    assert {"rt_env_exec", "rt_env_start", "rt_env_status"} <= set(on)
+    assert not environment_enabled({"environment": {"enabled": False}})
+    assert not environment_enabled({})

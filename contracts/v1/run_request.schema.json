@@ -103,6 +103,7 @@
       "required": ["tools"],
       "properties": {
         "tools": {"type": "array", "items": {"type": "string"}},
+        "toolsets": {"type": "array", "items": {"enum": ["web", "vision", "image_gen"]}},
         "credential_grants": {
           "type": "array",
           "items": {

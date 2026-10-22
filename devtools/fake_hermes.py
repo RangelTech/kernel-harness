@@ -10,7 +10,7 @@ O comportamento e dirigido por diretivas no texto de entrada, na ordem em que ap
   [[say:texto]]  [[think:texto]]  [[tool:rt_x {json}]]  [[skill:nome]]  [[sleep:seg]]
   [[usage:in,out]]  [[proposal:nome|conteudo com \\n]]  [[memproposal:texto]]
   [[reason:texto]]  [[sub:objetivo|id|tarefas]]  [[subdone:id|objetivo]]
-  [[approvalreq]]  [[listskills]]  [[interrupted]]  [[partial]]  [[fail]]  [[fail429:N]]  [[empty]]
+  [[approvalreq]]  [[listskills]]  [[interrupted]]  [[partial]]  [[fail]]  [[fail429:N]]  [[fail503]]  [[failauth]]  [[empty]]
 Sem diretivas: responde `ok[n] <inicio da mensagem>` (n = turno na sessao).
 Regras de memoria da sessao: "meu codinome e X" guarda; "qual meu codinome" recupera.
 """
@@ -387,6 +387,12 @@ class FakeHermes:
                 if seen < int(arg or 1):
                     run.emit("run.failed", error="HTTP 429: litellm.RateLimitError: rate limit exceeded")
                     return
+            elif name == "fail503":
+                run.emit("run.failed", error="HTTP 503: [claude/claude-haiku] [503]: service unavailable (reset after 2m)")
+                return
+            elif name == "failauth":
+                run.emit("run.failed", error="HTTP 401: [claude/claude-haiku] [401]: authentication_error OAuth access token has been revoked")
+                return
             elif name == "empty":
                 run.emit("run.completed", output="",
                          usage=self._usage(sess, text, in_tok, out_tok, ""))

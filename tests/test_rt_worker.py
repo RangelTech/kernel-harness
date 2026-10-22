@@ -321,3 +321,11 @@ async def test_drenagem_recusa_novas_e_conclui_as_em_voo(profiles):
         await client.close()
         await runner.cleanup()
         await front.stop()
+
+
+def test_modulos_pesados_do_filho_sao_preaquecidos_no_zigoto():
+    # nemo_relay (~0,5 s de import) e afins eram importados depois do fork, a cada run
+    from rt_worker.zygote import warm_module_names
+    names = set(warm_module_names())
+    assert {"nemo_relay", "hermes_cli.model_switch", "agent.monitoring"} <= names
+    assert len(names) == len(warm_module_names())  # sem repetidos
