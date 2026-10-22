@@ -6,6 +6,7 @@ useDefault = true
 [allowlist]
 description = "Valores sinteticos de teste/dev (chaves falsas, sentinelas de vazamento): nada aqui e segredo real."
 paths = [
+  '''^poc/''',  # removido da arvore; ainda existe no historico
   '''^dev/''',
   '''^tests/''',
   '''^tests_real/''',
