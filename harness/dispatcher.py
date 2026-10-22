@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 
 from harness.approvals import ApprovalService
-from harness.backend import Backend
+from harness.backend import Backend, call_with_retry
 from harness.config import Settings
 from harness.events import EventBus
 from harness.hermes_client import (
@@ -489,9 +489,11 @@ class Dispatcher:
         await self.store.mark_terminal(run_id, "completed")
         self.stats["completed"] += 1
         try:
-            await self.backend.post_message(run_id, ctx.run_token, {
+            message = {
                 "tenant_id": ctx.tenant_id, "user_id": ctx.user_id, "chat_id": ctx.chat_id,
-                "role": "assistant", "content": ctx.redactor.scrub(result.text)})
+                "role": "assistant", "content": ctx.redactor.scrub(result.text)}
+            await call_with_retry(
+                lambda: self.backend.post_message(run_id, ctx.run_token, message))
         except Exception as exc:  # noqa: BLE001
             log.warning("post de mensagem falhou: %s", type(exc).__name__)
 

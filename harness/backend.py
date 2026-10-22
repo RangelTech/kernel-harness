@@ -14,6 +14,7 @@ itens abertos para o backend confirmar):
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Protocol
 
@@ -22,6 +23,31 @@ import httpx
 from harness.config import Settings
 
 log = logging.getLogger("harness.backend")
+
+
+RETRY_DELAYS_S = (1.0, 2.0, 4.0, 8.0, 15.0, 30.0)
+
+
+async def call_with_retry(call, delays=RETRY_DELAYS_S):
+    """Repete `call` enquanto o backend estiver fora (erro de transporte ou HTTP 5xx), ate ~60 s.
+
+    Erro 4xx e definitivo (ex.: 401 'Execucao encerrada' = o relay do motor ja gravou a resposta)
+    e sobe na hora. Cobre o reinicio do backend no fim da run (spec 10, Gate T: kill -9 do relay).
+    """
+    last: Exception | None = None
+    for delay in (0.0, *delays):
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            return await call()
+        except BackendError as exc:
+            if exc.status < 500:
+                raise
+            last = exc
+        except (httpx.TransportError, OSError) as exc:
+            last = exc
+    assert last is not None
+    raise last
 
 
 class BackendError(Exception):
