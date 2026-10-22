@@ -1,3 +1,0 @@
-# Helper dos POCs: python + PyYAML (o gerador de perfis roda no kernel-harness, nao dentro do Hermes).
-FROM python:3.12-slim
-RUN pip install --no-cache-dir pyyaml==6.0.2
