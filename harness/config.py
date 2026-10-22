@@ -83,7 +83,7 @@ class Settings:
     idempotency_ttl_s: int = 86_400
     # --- limites da run (spec 4.3)
     silence_timeout_s: float = 120.0
-    turn_timeout_s: float = 900.0
+    turn_timeout_s: float = 1800.0
     max_tool_calls_per_turn: int = 40
     tool_output_limit: int = 24_000
     sql_max_rows: int = 50_000
@@ -144,7 +144,7 @@ class Settings:
             queue_expiry_s=_float("HARNESS_QUEUE_EXPIRY_S", 180.0),
             model_retry_delay_s=_float("HARNESS_MODEL_RETRY_S", 8.0),
             silence_timeout_s=_float("HARNESS_SILENCE_TIMEOUT_S", 120.0),
-            turn_timeout_s=_float("HARNESS_TURN_TIMEOUT_S", 900.0),
+            turn_timeout_s=_float("HARNESS_TURN_TIMEOUT_S", 1800.0),
             max_tool_calls_per_turn=_int("HARNESS_MAX_TOOL_CALLS", 40),
             tool_output_limit=_int("HARNESS_TOOL_OUTPUT_LIMIT", 24_000),
             approval_timeout_s=_float("HARNESS_APPROVAL_TIMEOUT_S", 120.0),

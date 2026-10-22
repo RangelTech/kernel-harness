@@ -47,6 +47,9 @@ class Settings:
     model_alias: str
     message: str
     timeout_s: float
+    tools: tuple[str, ...] = ()
+    environment: bool = False
+    gateway_url: str = ""  # QA: aponta a run para um gateway falso (prova de 429/503 sem tocar no real)
 
     @classmethod
     def from_env(cls, timeout_s: float) -> Settings:
@@ -63,6 +66,9 @@ class Settings:
             model_alias=os.environ.get("HARNESS_QA_MODEL_ALIAS", "agente-padrao"),
             message=os.environ.get("HARNESS_QA_MESSAGE", "Responda somente: QA K4 K5 OK."),
             timeout_s=timeout_s,
+            tools=tuple(t for t in os.environ.get("HARNESS_QA_TOOLS", "").split(",") if t),
+            environment=os.environ.get("HARNESS_QA_ENV") == "1",
+            gateway_url=os.environ.get("HARNESS_QA_GATEWAY_URL", ""),
         )
 
 
@@ -84,12 +90,16 @@ def build_body(settings: Settings, *, tenant_id: str, index: int) -> dict[str, A
         "attachments": [],
         "history": [],
         "model": {"alias": settings.model_alias, "reasoning_effort": "low"},
-        "skills": {"system_rev": "qa-k4-k5", "tenant_package": {"sha256": "qa-k4-k5"}, "user_skills": []},
-        "manifest": {"tools": [], "limits": {"tenant_concurrency": 2}},
+        "skills": {"system_rev": "qa-k4-k5", "tenant_package": {"sha256": "qa-k4-k5", "files": [{"path": "AGENTE.md", "content": "Voce e um agente de teste. Responda curto."}]}, "user_skills": []},
+        "manifest": {"tools": list(settings.tools), "environment": {"enabled": settings.environment},
+                     "limits": {"tenant_concurrency": 2}},
         "credentials": {},
         "credentials_catalog": [],
         "memory": {"recall": []},
     }
+    if settings.gateway_url:
+        body["model"]["gateway"] = {"base_url": settings.gateway_url,
+                                    "api_key": os.environ.get("HARNESS_QA_GATEWAY_KEY", "qa-fake")}
     body["run_token"] = sign_backend_run_token(
         {"run_id": run_id, "tenant_id": tenant_id, "user_id": user_id, "exp": time.time() + settings.timeout_s + 120},
         settings.run_token_secret,
@@ -107,6 +117,7 @@ class Observation:
     status: str | None
     error_code: str | None
     http_status: int | None
+    first_work_s: float | None = None  # 1o evento que nao e o passo imediato "Iniciando"
 
 
 def percentile(values: list[float], percent: float) -> float | None:
@@ -114,6 +125,17 @@ def percentile(values: list[float], percent: float) -> float | None:
         return None
     ordered = sorted(values)
     return ordered[min(len(ordered) - 1, int(len(ordered) * percent))]
+
+
+def is_work_event(event_type: str, data: list[str]) -> bool:
+    """Evento de trabalho real (token, ferramenta, erro, fim), nao o aviso imediato de inicio."""
+    if event_type != "step":
+        return True
+    try:
+        payload = json.loads("\n".join(data))
+    except json.JSONDecodeError:
+        return True
+    return not (payload.get("kind") == "queue" and payload.get("label") == "Iniciando")
 
 
 class Runner:
@@ -129,6 +151,7 @@ class Runner:
             on_submitted(body["run_id"], tenant_id)
         started = time.perf_counter()
         first_at: float | None = None
+        work_at: float | None = None
         terminal_event: str | None = None
         error_code: str | None = None
         http_status: int | None = None
@@ -147,6 +170,8 @@ class Runner:
                     elif line.startswith("data:"):
                         data.append(line[5:].strip())
                     elif not line and event_type:
+                        if work_at is None and is_work_event(event_type, data):
+                            work_at = time.perf_counter() - started
                         if first_at is None:
                             first_at = time.perf_counter() - started
                             if first_event:
@@ -165,7 +190,7 @@ class Runner:
                                terminal_event, None, type(exc).__name__, http_status)
         status, code = await self.status(client, body["run_id"], tenant_id)
         return Observation(body["run_id"], tenant_id, time.perf_counter() - started, first_at,
-                           terminal_event, status, error_code or code, http_status)
+                           terminal_event, status, error_code or code, http_status, work_at)
 
     async def status(self, client: httpx.AsyncClient, run_id: str, tenant_id: str) -> tuple[str | None, str | None]:
         try:
@@ -181,6 +206,7 @@ class Runner:
 
 def report(mode: str, observations: list[Observation], *, elapsed_s: float, args: argparse.Namespace) -> dict[str, Any]:
     first = [item.first_event_s for item in observations if item.first_event_s is not None]
+    work = [item.first_work_s for item in observations if item.first_work_s is not None]
     succeeded = [item for item in observations if item.status == "completed" and item.terminal_event == "done"]
     errors = [item for item in observations if item not in succeeded]
     return {
@@ -192,6 +218,7 @@ def report(mode: str, observations: list[Observation], *, elapsed_s: float, args
         "counts": {"submitted": len(observations), "completed": len(succeeded), "not_completed": len(errors)},
         "success_ratio": round(len(succeeded) / len(observations), 6) if observations else 0.0,
         "first_event_s": {"p50": percentile(first, .5), "p95": percentile(first, .95)},
+        "first_work_s": {"p50": percentile(work, .5), "p95": percentile(work, .95)},
         "runs": [asdict(item) for item in observations],
     }
 

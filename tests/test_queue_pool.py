@@ -375,5 +375,45 @@ async def test_h1_persistent_429_ends_with_friendly_message_never_success(make_r
     rig = await make_rig(1, model_retry_delay_s=0.05)
     ev = await rig.send(rig.body(run_id="rl1", message="[[fail429:99]][[say:nunca]]"))
     last = final(ev)
-    assert last.type == "error" and last.data["code"] == "rate_limited"
-    assert "muitas solicitações" in last.data["detail"]
+    assert last.type == "error" and last.data["code"] == "model_rate_limited"
+    assert "ocupado" in last.data["detail"] and "limite de uso" in last.data["detail"]
+    assert "demorou" not in last.data["detail"]
+
+
+async def test_model_503_ends_with_model_rate_limited_not_timeout(make_rig):
+    rig = await make_rig(1, model_retry_delay_s=0.05)
+    ev = await rig.send(rig.body(run_id="rl503", message="[[fail503]][[say:nunca]]"))
+    last = final(ev)
+    assert last.type == "error" and last.data["code"] == "model_rate_limited"
+    assert "demorou" not in last.data["detail"]
+
+
+async def test_model_auth_failure_is_model_unavailable_without_retry(make_rig):
+    rig = await make_rig(1, model_retry_delay_s=0.05)
+    ev = await rig.send(rig.body(run_id="rlauth", message="[[failauth]][[say:nunca]]"))
+    last = final(ev)
+    assert last.type == "error" and last.data["code"] == "model_unavailable"
+    assert "indisponível" in last.data["detail"]
+    assert not any(e.type == "step" and e.data.get("label") == "Aguardando o modelo liberar" for e in ev)
+
+
+async def test_first_event_is_immediate_progress_step(make_rig):
+    rig = await make_rig(1)
+    ev = await rig.send(rig.body(run_id="fe1", message="[[say:oi]]"))
+    assert ev[0].type == "step" and ev[0].data == {
+        "kind": "queue", "label": "Iniciando", "status": "done"}
+    assert final(ev).type == "done"
+
+
+def test_classifiers_detect_gateway_statuses_and_ignore_noise():
+    from harness.dispatcher import is_model_unavailable, is_rate_limited
+    assert is_rate_limited("HTTP 429: [claude/x] [429]: rate limit (reset after 2m)")
+    assert is_rate_limited("HTTP 503: service unavailable")
+    assert is_rate_limited("Error code: 529 - overloaded_error")
+    assert is_rate_limited("litellm.RateLimitError: quota exceeded")
+    assert not is_rate_limited("falha simulada")
+    assert not is_rate_limited("processou 4290 tokens em 5030 ms")
+    assert is_model_unavailable("HTTP 401: authentication_error OAuth access token has been revoked")
+    assert is_model_unavailable("HTTP 502: bad gateway")
+    assert not is_model_unavailable("falha simulada")
+    assert not is_model_unavailable("leu 5001 linhas")

@@ -260,8 +260,8 @@ def call_broker(tool: str, args: dict[str, Any], session_id: str, task_id: str |
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
     )
     # O broker pode demorar de verdade: executor (ate 120 s + folga), exec no ambiente e espera de aprovacao
-    # (120 s). O limite real e o do turno (540 s) no kernel; 30 s derrubava essas chamadas com broker_unreachable.
-    timeout = float(os.environ.get("RT_BROKER_TIMEOUT_S", "540"))
+    # (120 s). O limite real e o do turno (1800 s) no kernel; 30 s derrubava essas chamadas com broker_unreachable.
+    timeout = float(os.environ.get("RT_BROKER_TIMEOUT_S", "1830"))
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read(MAX_RESPONSE_BYTES + 1)

@@ -44,6 +44,23 @@ OPTIONAL_TOOLSETS = {"web", "vision", "image_gen"}              # liberaveis pel
 # Nunca habilitaveis em worker (spec 5.5/5.8): tocam disco/shell/rede local do worker.
 FORBIDDEN_TOOLSETS = {"terminal", "file", "code_execution", "browser", "cronjob", "delegation",
                       "tts", "kanban", "computer_use", "connections", "clarify"}
+# Backends bundled do Hermes que carregam em TODA run (cada import+register custa CPU de ~0,4 s por run, medido
+# em producao: filho 1,81 -> 1,44 s de CPU) e que o produto nao usa. Chave = caminho do plugin no Hermes.
+ALWAYS_DISABLED_PLUGINS = [
+    "browser/browser_use", "browser/browserbase", "browser/firecrawl",
+    "dashboard_auth/basic", "dashboard_auth/drain", "dashboard_auth/nous", "dashboard_auth/self_hosted",
+    "platforms/a2a",
+    "video_gen/deepinfra", "video_gen/fal", "video_gen/openrouter", "video_gen/xai",
+]
+# Ligados so quando o manifesto libera o toolset correspondente.
+IMAGE_GEN_PLUGINS = [
+    "image_gen/deepinfra", "image_gen/fal", "image_gen/krea", "image_gen/meta-ai", "image_gen/openai",
+    "image_gen/openai-codex", "image_gen/openrouter", "image_gen/xai",
+]
+WEB_PLUGINS = [
+    "web/brave_free", "web/ddgs", "web/exa", "web/firecrawl", "web/keenable", "web/openai_native",
+    "web/parallel", "web/perplexity", "web/searxng", "web/tavily", "web/xai",
+]
 # terminal+file so existem quando o AMBIENTE da empresa esta habilitado (backend ssh).
 ENV_TOOLSETS = ["terminal", "file"]
 
@@ -91,6 +108,8 @@ class Limits:
 @dataclass
 class EnvironmentSpec:
     enabled: bool = False
+    # `enabled` sem ssh_host: ambiente do runtime-manager (ferramentas rt_env_*), sem terminal/file no worker.
+    # ssh_host + ssh_key_path: modo legado (terminal SSH direto no worker).
     ssh_host: str = ""
     ssh_user: str = "agent"
     ssh_port: int = 22
@@ -206,8 +225,8 @@ def _validate_manifest(m: Manifest) -> None:
     if m.limits.max_turns < 1 or m.limits.max_turns > 500:
         raise ConfigError("max_turns fora de 1..500")
     e = m.environment
-    if e.enabled and not (e.ssh_host and e.ssh_key_path):
-        raise ConfigError("ambiente habilitado exige ssh_host e ssh_key_path")
+    if e.enabled and bool(e.ssh_host) != bool(e.ssh_key_path):
+        raise ConfigError("ambiente SSH incompleto: informe ssh_host e ssh_key_path juntos")
 
 
 def build_config(tenant: str, template: str, user: str | None, manifest: Manifest | dict,
@@ -218,6 +237,8 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
     m = manifest if isinstance(manifest, Manifest) else Manifest.from_dict(manifest)
     _validate_manifest(m)
     cfg = load_base()
+    # ambiente SSH direto (legado) so com host+chave; `enabled` puro usa o runtime-manager via rt_env_*
+    ssh_env = bool(m.environment.enabled and m.environment.ssh_host and m.environment.ssh_key_path)
 
     ext = system_skill_dirs(paths.system_skills, m.tools, m.environment.enabled)
     ext.append(f"{paths.tenant_skills_root}/{template}/{template_version}")
@@ -229,13 +250,19 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
     if m.tools:
         toolsets.append(PLATFORM_TOOLSET)
     toolsets += [t for t in m.toolsets if t not in toolsets]
-    if m.environment.enabled:
+    if ssh_env:
         toolsets += ENV_TOOLSETS
     disabled = [t for t in ALWAYS_DISABLED]
     if external:
         disabled += EXTERNAL_BLOCKED_TOOLSETS
-    if not m.environment.enabled:
+    if not ssh_env:
         disabled += ["terminal", "code_execution", "file"]
+
+    plugins_disabled = list(ALWAYS_DISABLED_PLUGINS)
+    if "image_gen" not in toolsets:
+        plugins_disabled += IMAGE_GEN_PLUGINS
+    if "web" not in toolsets:
+        plugins_disabled += WEB_PLUGINS
 
     model: dict[str, Any] = {"default": m.model_alias, "base_url": paths.llm_base_url}
     if paths.llm_key_env:
@@ -245,10 +272,15 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
         "model": model,
         "auxiliary": {"compression": {"base_url": paths.llm_base_url, "model": aux_model}},
         "platform_toolsets": {"api_server": toolsets},
-        "agent": {"max_turns": m.limits.max_turns, "disabled_toolsets": disabled},
+        "agent": {"max_turns": m.limits.max_turns, "disabled_toolsets": disabled,
+                  # 429/503 do gateway: falha na hora e o kernel decide (espera curta + mensagem amigavel). O padrao
+                  # do Hermes dorme o Retry-After (ate 10 min) e depois entra em ciclos de recuperacao, tudo sem
+                  # evento, ate estourar o silencio do kernel.
+                  "api_max_retries": 1, "auto_recovery_cycles": 0},
         "skills": {"external_dirs": ext},
         "plugins": {
             "enabled": [PLUGIN_ID] if m.tools else [],
+            "disabled": plugins_disabled,
             "entries": {PLUGIN_ID: {"settings": {"tools": sorted(set(m.tools))}}} if m.tools else {},
         },
     })
@@ -271,7 +303,7 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
         cfg["skills"]["creation_nudge_interval"] = 10
         cfg["skills"]["write_approval"] = True   # o promotor do kernel aprova sozinho apos o scanner
 
-    if m.environment.enabled:
+    if ssh_env:
         e = m.environment
         cfg["terminal"] = {"backend": "ssh", "ssh_host": e.ssh_host, "ssh_user": e.ssh_user,
                            "ssh_port": e.ssh_port, "ssh_key": e.ssh_key_path, "persistent_shell": True}

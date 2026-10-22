@@ -18,11 +18,22 @@ COPY plugin/image/config.base.yaml /opt/rt/config.base.yaml
 COPY --chmod=0755 plugin/image/00-rt-setup /etc/cont-init.d/00-rt-setup
 COPY rt_worker /opt/rt/rt_worker
 
+# Bytecode pre-compilado: a imagem base traz o fonte do Hermes sem __pycache__ e roda com
+# PYTHONDONTWRITEBYTECODE=1 em rootfs somente leitura, entao TODA importacao compilava do fonte (zigoto
+# aquecia em 35-75 s sob carga e cada filho recompilava ~160 arquivos de plugin: ~0,5 s de CPU por run).
+# Os .pyc ficam ao lado do fonte e so sao lidos em runtime. `|| true`: exemplos com sintaxe antiga.
+RUN /opt/hermes/.venv/bin/python -m compileall -q -j 0 \
+      -x "(python-3\.14|node_modules|\.venv|web_dist|ui-tui|/tests?/|/tools/node-|/docs?/)" \
+      /opt/hermes/agent /opt/hermes/gateway /opt/hermes/hermes_cli /opt/hermes/plugins \
+      /opt/hermes/tools /opt/hermes/cron /opt/hermes/acp_adapter /opt/hermes/hermes_platform \
+      /opt/rt >/dev/null 2>&1 \
+    && /opt/hermes/.venv/bin/python -m compileall -q -l /opt/hermes >/dev/null 2>&1 || true
+
 # Padroes do modo headless (a chave API_SERVER_KEY e SEMPRE injetada em runtime, nunca na imagem).
 ENV API_SERVER_ENABLED=true \
     API_SERVER_HOST=0.0.0.0 \
     API_SERVER_PORT=8642 \
-    RT_BROKER_TIMEOUT_S=540 \
+    RT_BROKER_TIMEOUT_S=1830 \
     PYTHONPATH=/opt/rt \
     HERMES_PYTHON=/opt/hermes/.venv/bin/python \
     RT_WORKER_SLOTS=16 \

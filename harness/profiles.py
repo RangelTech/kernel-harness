@@ -26,7 +26,7 @@ import uuid
 from pathlib import Path
 from typing import Protocol
 
-from broker.catalog import expand_tools
+from broker.catalog import environment_enabled, expand_tools
 from harness.backend import Backend
 from harness.config import Settings
 
@@ -34,6 +34,8 @@ log = logging.getLogger("harness.profiles")
 
 _SAFE = re.compile(r"[^A-Za-z0-9._-]")
 HASH_MARKER = ".rt_profile_hash"
+# Muda quando o config.yaml gerado muda de forma (forca regerar perfis existentes): cfg2 = api_max_retries/ambiente rm.
+PROFILE_CONFIG_REV = "cfg2"
 MAX_USER_SKILLS = 50  # ativas por usuario (spec 3.1)
 MAX_USER_SKILL_BYTES = 32 * 1024
 MAX_USER_SKILLS_TOTAL = 256 * 1024  # inline por run
@@ -304,7 +306,7 @@ class ProfileManager:
                                                           skills.get("user_skills"))
         key_fp = hashlib.sha256(self.s.llm_worker_key.encode()).hexdigest()[:12]
         h = template_hash(version_id=version_id, package_sha=(pkg or {}).get("sha256", ""),
-                          system_rev=skills.get("system_rev", "") + "|" + key_fp
+                          system_rev=skills.get("system_rev", "") + "|" + key_fp + "|" + PROFILE_CONFIG_REV
                           + ("|ext" if contact is not None else ""),
                           manifest=manifest, model=model)
         home = Path(self.s.profiles_root) / name
@@ -315,7 +317,7 @@ class ProfileManager:
                 profile_name=name, profiles_root=self.s.profiles_root, tenant_id=tenant_id,
                 template_id=template_id, user_id=user_id, template_version_id=version_id,
                 template_hash=h, contact=contact,
-                manifest={**manifest, "tools": expand_tools(manifest.get("tools"))},
+                manifest={**manifest, "tools": expand_tools(manifest.get("tools"), environment_enabled(manifest))},
                 model=model,
                 skills_dirs={"system": self.s.system_skills_dir,
                              "tenant": str(Path(self.s.tenant_skills_root) / _seg(template_id)
