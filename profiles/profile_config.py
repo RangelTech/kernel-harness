@@ -44,6 +44,23 @@ OPTIONAL_TOOLSETS = {"web", "vision", "image_gen"}              # liberaveis pel
 # Nunca habilitaveis em worker (spec 5.5/5.8): tocam disco/shell/rede local do worker.
 FORBIDDEN_TOOLSETS = {"terminal", "file", "code_execution", "browser", "cronjob", "delegation",
                       "tts", "kanban", "computer_use", "connections", "clarify"}
+# Backends bundled do Hermes que carregam em TODA run (cada import+register custa CPU de ~0,4 s por run, medido
+# em producao: filho 1,81 -> 1,44 s de CPU) e que o produto nao usa. Chave = caminho do plugin no Hermes.
+ALWAYS_DISABLED_PLUGINS = [
+    "browser/browser_use", "browser/browserbase", "browser/firecrawl",
+    "dashboard_auth/basic", "dashboard_auth/drain", "dashboard_auth/nous", "dashboard_auth/self_hosted",
+    "platforms/a2a",
+    "video_gen/deepinfra", "video_gen/fal", "video_gen/openrouter", "video_gen/xai",
+]
+# Ligados so quando o manifesto libera o toolset correspondente.
+IMAGE_GEN_PLUGINS = [
+    "image_gen/deepinfra", "image_gen/fal", "image_gen/krea", "image_gen/meta-ai", "image_gen/openai",
+    "image_gen/openai-codex", "image_gen/openrouter", "image_gen/xai",
+]
+WEB_PLUGINS = [
+    "web/brave_free", "web/ddgs", "web/exa", "web/firecrawl", "web/keenable", "web/openai_native",
+    "web/parallel", "web/perplexity", "web/searxng", "web/tavily", "web/xai",
+]
 # terminal+file so existem quando o AMBIENTE da empresa esta habilitado (backend ssh).
 ENV_TOOLSETS = ["terminal", "file"]
 
@@ -241,6 +258,12 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
     if not ssh_env:
         disabled += ["terminal", "code_execution", "file"]
 
+    plugins_disabled = list(ALWAYS_DISABLED_PLUGINS)
+    if "image_gen" not in toolsets:
+        plugins_disabled += IMAGE_GEN_PLUGINS
+    if "web" not in toolsets:
+        plugins_disabled += WEB_PLUGINS
+
     model: dict[str, Any] = {"default": m.model_alias, "base_url": paths.llm_base_url}
     if paths.llm_key_env:
         model["key_env"] = paths.llm_key_env
@@ -257,6 +280,7 @@ def build_config(tenant: str, template: str, user: str | None, manifest: Manifes
         "skills": {"external_dirs": ext},
         "plugins": {
             "enabled": [PLUGIN_ID] if m.tools else [],
+            "disabled": plugins_disabled,
             "entries": {PLUGIN_ID: {"settings": {"tools": sorted(set(m.tools))}}} if m.tools else {},
         },
     })

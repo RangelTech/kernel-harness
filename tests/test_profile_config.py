@@ -90,3 +90,13 @@ def test_expand_tools_adds_env_tools_when_environment_is_on():
     assert {"rt_env_exec", "rt_env_start", "rt_env_status"} <= set(on)
     assert not environment_enabled({"environment": {"enabled": False}})
     assert not environment_enabled({})
+
+
+def test_unused_bundled_plugins_are_disabled_unless_the_toolset_is_on():
+    base = pc.build_config("t1", "tpl", "u1", {"tools": []}, pc.Paths())["plugins"]["disabled"]
+    assert "browser/browser_use" in base and "dashboard_auth/basic" in base
+    assert "web/exa" in base and "image_gen/fal" in base
+    web = pc.build_config("t1", "tpl", "u1", {"tools": [], "toolsets": ["web", "image_gen"]},
+                          pc.Paths())["plugins"]["disabled"]
+    assert "web/exa" not in web and "image_gen/fal" not in web
+    assert "browser/browser_use" in web  # browser nunca
