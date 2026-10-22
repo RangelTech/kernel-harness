@@ -109,7 +109,6 @@ tests_real/   E2E contra o Hermes real (precisa de dev/compose.real.yml em pé)
 scripts/      verify.sh (gate local)
 docs/         adr/, runbooks/, qa/, provenance.md, este onboarding e o guia do administrador
 runtime/, executor/   reservados (README apenas); o código real está no repo runtime-manager
-poc/          experimentos antigos de prova de conceito (não fazem parte do serviço)
 ```
 
 ## 5. Rodar e testar
