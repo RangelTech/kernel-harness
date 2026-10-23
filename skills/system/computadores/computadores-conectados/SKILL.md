@@ -10,8 +10,17 @@ Skill global do sistema. Não aparece nas skills da empresa e não é editável 
 ## Quando usar
 O usuário pediu algo que está **em um computador dele** (arquivo na Área de Trabalho, programa, pasta, navegador). Os computadores liberados para você aparecem na lista **Computadores** do início da conversa (nome, sistema, online ou offline). Use **só** o nome que está nessa lista. Se o computador estiver **offline**, diga ao usuário e peça para ele ligar o computador ou verificar a internet; não tente de novo em seguida.
 
+## Como chamar (obrigatório, nesta ordem)
+As credenciais dos computadores chegam como variáveis de ambiente **só quando você as lista** no parâmetro `secrets` do `rt_env_exec` (o valor nunca aparece para você). No catálogo de credenciais da conversa há os nomes `PC_HOSTS` e, para cada computador, `PC_<NOME>_KEY`, `PC_<NOME>_HUB`, `PC_<NOME>_PORT`, `PC_<NOME>_TOKEN` e `PC_<NOME>_OS`. **Liste todos eles em `secrets` em toda chamada de `luar-pc`.**
+
+1. **Instalar a ferramenta (uma vez por ambiente).** Rode no `rt_env_exec`:
+   `mkdir -p ~/bin && curl -fsSL https://conector.rangeltech.net/dl/luar-pc -o ~/bin/luar-pc && curl -fsSL https://conector.rangeltech.net/dl/luar-relay.py -o ~/bin/luar-relay.py && chmod +x ~/bin/luar-pc ~/bin/luar-relay.py`
+   Depois use sempre `python3 ~/bin/luar-pc ...`.
+2. **Listar o que existe:** `python3 ~/bin/luar-pc hosts` (com `secrets` = todos os `PC_*`).
+3. Se o computador estiver **offline**, avise o usuário e pare.
+
 ## Ferramenta
-Use sempre a CLI `luar-pc` (ela cuida das aspas, dos acentos e das barras do Windows):
+Use sempre a CLI `luar-pc` (`python3 ~/bin/luar-pc`) (ela cuida das aspas, dos acentos e das barras do Windows):
 
 | Comando | Para que serve |
 |---|---|
