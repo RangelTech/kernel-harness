@@ -280,6 +280,28 @@ async def memories_extract(request: Request):
     return {"facts": facts}
 
 
+@router.post("/v1/profiles/reset")
+async def profile_reset(request: Request):
+    """Apaga o perfil (memoria, sessoes, aprendizado) de um agente para um usuario. Regenera no proximo uso."""
+    import shutil
+
+    from harness.profiles import profile_name, short_profile_name
+
+    k = kernel_of(request)
+    require_service(request, k)
+    body = await read_json(request, 64 * 1024)
+    tenant_id, template_id, user_id = body.get("tenant_id"), body.get("template_id"), body.get("user_id")
+    if not (tenant_id and template_id and user_id):
+        raise ApiError(422, "invalid_request", "Informe tenant_id, template_id e user_id.")
+    name = (short_profile_name(tenant_id, template_id, user_id) if k.s.hermes_master_secret
+            else profile_name(tenant_id, template_id, user_id))
+    home = Path(k.s.profiles_root) / name
+    removed = home.is_dir()
+    if removed:
+        shutil.rmtree(home, ignore_errors=True)
+    return {"removed": removed}
+
+
 @router.get("/v1/stats")
 async def stats(request: Request):
     k = kernel_of(request)
