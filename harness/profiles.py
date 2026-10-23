@@ -61,6 +61,22 @@ def short_profile_name(tenant_id: str, template_id: str, user_id: str | None,
     return profile_id(tenant_id, template_id, user_id, contact)
 
 
+_SYS_FP: dict[str, str] = {}
+
+
+def system_skills_fingerprint(root: str) -> str:
+    """Digest do conteudo das skills de sistema (muda a cada skill nova/editada, forcando regerar perfis)."""
+    if root not in _SYS_FP:
+        h = hashlib.sha256()
+        base = Path(root)
+        if base.is_dir():
+            for f in sorted(base.rglob("SKILL.md")):
+                h.update(f.relative_to(base).as_posix().encode())
+                h.update(f.read_bytes())
+        _SYS_FP[root] = h.hexdigest()[:12]
+    return _SYS_FP[root]
+
+
 def template_hash(*, version_id: str, package_sha: str, system_rev: str, manifest: dict,
                   model: dict) -> str:
     raw = json.dumps({"v": version_id, "p": package_sha, "s": system_rev, "m": manifest,
@@ -306,7 +322,7 @@ class ProfileManager:
                                                           skills.get("user_skills"))
         key_fp = hashlib.sha256(self.s.llm_worker_key.encode()).hexdigest()[:12]
         h = template_hash(version_id=version_id, package_sha=(pkg or {}).get("sha256", ""),
-                          system_rev=skills.get("system_rev", "") + "|" + key_fp + "|" + PROFILE_CONFIG_REV
+                          system_rev=skills.get("system_rev", "") + "|" + system_skills_fingerprint(self.s.system_skills_dir) + "|" + key_fp + "|" + PROFILE_CONFIG_REV
                           + ("|ext" if contact is not None else ""),
                           manifest=manifest, model=model)
         home = Path(self.s.profiles_root) / name
