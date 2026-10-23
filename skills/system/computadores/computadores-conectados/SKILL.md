@@ -33,6 +33,8 @@ Use sempre a CLI `luar-pc` (`python3 ~/bin/luar-pc`) (ela cuida das aspas, dos a
 | `luar-pc pip NOME <pacote>` | instalar uma biblioteca Python extra no ambiente isolado da LUAR (nunca no Python do cliente) |
 | `luar-pc kit NOME status` | ver a versão do Python do computador |
 
+Saída grande é cortada em ~8 KB. Para pastas cheias, peça só o que precisa: `luar-pc run NOME "Get-ChildItem \"$env:USERPROFILE\Desktop\" | Select-Object -First 5 Name"` (Windows) ou `ls | head -5` (Linux). O nome do computador sai de `luar-pc run NOME hostname`.
+
 ## Regra de ouro: o arquivo não sai do computador
 1. **Prefira executar Python no próprio computador** (`luar-pc py`). O arquivo é lido e editado lá. O que volta para você é **texto curto**: a estrutura, um resumo, um erro.
 2. **Nunca imprima o arquivo inteiro.** Mostre cabeçalho, nomes de colunas, contagem de linhas e, no máximo, 3 linhas de exemplo. Resultados grandes viram resumo (contagens, somas, valores distintos).
